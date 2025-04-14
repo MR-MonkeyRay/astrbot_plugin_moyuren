@@ -8,7 +8,8 @@
     },
     "default": [
       "https://api.vvhan.com/api/moyu",
-      "https://api.52vmy.cn/api/wl/moyu"
+      "https://api.52vmy.cn/api/wl/moyu",
+      "https://dayu.qqsuu.cn/moyuribao/apis.php"
     ]
   },
   "templates": {

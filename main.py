@@ -16,7 +16,7 @@ from .scheduler import Scheduler
     "moyuren",
     "quirrel",
     "一个功能完善的摸鱼人日历插件",
-    "2.3.3",
+    "2.3.4",
     "https://github.com/Quirrel-zh/astrbot_plugin_moyuren",
 )
 class MoyuRenPlugin(Star):
@@ -68,6 +68,14 @@ class MoyuRenPlugin(Star):
         self.scheduler.start()
         # 立即更新任务队列
         self.scheduler.update_task_queue()
+        
+        # 记录任务队列初始状态
+        if hasattr(self.scheduler, 'task_queue') and self.scheduler.task_queue:
+            queue_info = [(dt.strftime("%Y-%m-%d %H:%M"), tgt) for dt, tgt in self.scheduler.task_queue]
+            logger.info(f"初始任务队列状态: {queue_info}")
+        else:
+            logger.info("初始任务队列为空")
+        
         logger.info("摸鱼人插件初始化完成")
 
         # 保存实例引用

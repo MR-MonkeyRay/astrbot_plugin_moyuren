@@ -158,12 +158,9 @@ class Scheduler:
                     hour=hour, minute=minute, second=0, microsecond=0
                 )
 
-                # 更新任务队列
-                for i, (time, task_target) in enumerate(self.task_queue):
-                    if self.normalize_session_id(task_target) == normalized_target:
-                        self.task_queue[i] = (next_time, task_target)
-                        heapq.heapify(self.task_queue)
-                        break
+                # 添加下一次定时任务到队列
+                heapq.heappush(self.task_queue, (next_time, target))
+                logger.info(f"已添加下一次定时任务，执行时间：{next_time.strftime('%Y-%m-%d %H:%M')}")
             except Exception as e:
                 logger.error(f"更新下一次执行时间失败: {str(e)}")
                 logger.error(traceback.format_exc())
@@ -210,6 +207,10 @@ class Scheduler:
 
                 # 执行任务
                 await self._execute_task(target, next_time)
+
+                # 记录任务队列状态
+                queue_info = [(dt.strftime("%Y-%m-%d %H:%M"), tgt) for dt, tgt in self.task_queue]
+                logger.info(f"执行任务后的队列状态: {queue_info}")
 
             except asyncio.CancelledError:
                 # 任务被取消
