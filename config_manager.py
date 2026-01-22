@@ -59,7 +59,7 @@ class ConfigManager:
                     f"配置文件格式错误：期望字典类型，实际为 {type(loaded_settings)}"
                 )
 
-            # 验证加载的配置并迁移旧配置
+            # 验证并加载配置
             for target, settings in loaded_settings.items():
                 if not isinstance(settings, dict):
                     logger.warning(f"跳过无效的群设置 {target}: {settings}")

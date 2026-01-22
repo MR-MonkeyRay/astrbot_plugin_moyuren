@@ -16,7 +16,7 @@ from .scheduler import Scheduler
     "moyuren",
     "quirrel",
     "一个功能完善的摸鱼人日历插件",
-    "2.3.4",
+    "2.4.0",
     "https://github.com/Quirrel-zh/astrbot_plugin_moyuren",
 )
 class MoyuRenPlugin(Star):
@@ -68,7 +68,9 @@ class MoyuRenPlugin(Star):
         self.scheduler.start()
         # 立即更新任务队列
         self.scheduler.update_task_queue()
-        
+        # 唤醒调度器处理初始任务
+        self.scheduler.wakeup_event.set()
+
         # 记录任务队列初始状态
         if hasattr(self.scheduler, 'task_queue') and self.scheduler.task_queue:
             queue_info = [(dt.strftime("%Y-%m-%d %H:%M"), tgt) for dt, tgt in self.scheduler.task_queue]
@@ -114,7 +116,8 @@ class MoyuRenPlugin(Star):
     @event_message_type(EventMessageType.ALL)
     async def on_all_message(self, event: AstrMessageEvent):
         """处理消息事件，检测触发词"""
-        await self.command_helper.handle_message(event)
+        async for result in self.command_helper.handle_message(event):
+            yield result
 
     async def terminate(self):
         """终止插件的所有活动"""
@@ -128,6 +131,11 @@ class MoyuRenPlugin(Star):
             # 停止定时任务
             await instance.scheduler.stop()
             logger.info("摸鱼人日历定时任务已停止")
+
+            # 关闭 image_manager 的 session
+            if hasattr(instance, "image_manager"):
+                await instance.image_manager.close()
+                logger.info("已关闭图片管理器网络会话")
 
             # 清理临时文件
             if hasattr(instance, "temp_dir") and os.path.exists(instance.temp_dir):

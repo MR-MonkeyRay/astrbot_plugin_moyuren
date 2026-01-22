@@ -1,5 +1,6 @@
-from astrbot.api.event import AstrMessageEvent, MessageEventResult, MessageChain
+from astrbot.api.event import AstrMessageEvent, MessageEventResult
 from astrbot.api import logger
+import astrbot.api.message_components as Comp
 from datetime import datetime, timedelta
 import re
 import traceback
@@ -66,13 +67,8 @@ class CommandHelper:
         return hour, minute
 
     def normalize_session_id(self, event: AstrMessageEvent) -> str:
-        """标准化会话ID，确保格式一致"""
-        try:
-            target = event.unified_msg_origin
-            return target
-        except Exception as e:
-            logger.error(f"标准化会话ID时出错: {str(e)}")
-            return event.unified_msg_origin  # 返回原始ID作为后备
+        """获取会话ID"""
+        return event.unified_msg_origin
 
     @command_error_handler
     async def handle_set_time(
@@ -221,8 +217,13 @@ class CommandHelper:
         if not trigger or len(trigger.strip()) == 0:
             raise ValueError("触发词不能为空")
 
-        target = self.normalize_session_id(event)
         trigger = trigger.strip()
+
+        # 验证触发词长度
+        if len(trigger) > 32:
+            raise ValueError("触发词长度不能超过32个字符")
+
+        target = self.normalize_session_id(event)
 
         if target not in self.config_manager.group_settings:
             self.config_manager.group_settings[target] = {"trigger_word": trigger}
@@ -262,9 +263,7 @@ class CommandHelper:
                 text = f"摸鱼人日历\n当前时间：{current_time}"
 
             # 创建简单的消息段列表传递给chain_result
-            from astrbot.api.message_components import Plain, Image
-
-            message_segments = [Plain(text), Image(file=image_path)]
+            message_segments = [Comp.Plain(text), Comp.Image.fromFileSystem(image_path)]
 
             # 使用消息段列表
             yield event.chain_result(message_segments)
@@ -276,7 +275,7 @@ class CommandHelper:
                 "发送摸鱼人日历失败，请查看日志获取详细信息"
             )
 
-    async def handle_message(self, event: AstrMessageEvent) -> None:
+    async def handle_message(self, event: AstrMessageEvent) -> AsyncGenerator[MessageEventResult, None]:
         """处理消息事件，检测触发词"""
         # 获取消息内容和来源
         message_text = event.message_obj.message_str
@@ -321,15 +320,8 @@ class CommandHelper:
                 text = f"摸鱼人日历\n当前时间：{current_time}"
 
             # 创建消息段列表
-            from astrbot.api.message_components import Plain, Image
-
-            message_segments = [Plain(text), Image(file=image_path)]
-
-            # 使用send_message直接发送消息段列表
-            from astrbot.api.event import MessageChain
-
-            message_chain = MessageChain(message_segments)
-            await self.context.send_message(target, message_chain)
+            message_segments = [Comp.Plain(text), Comp.Image.fromFileSystem(image_path)]
+            yield event.chain_result(message_segments)
         except Exception as e:
             logger.error(f"发送摸鱼人日历失败: {str(e)}")
             logger.error(traceback.format_exc())
