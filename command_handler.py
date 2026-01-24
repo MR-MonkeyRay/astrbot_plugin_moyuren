@@ -70,11 +70,93 @@ class CommandHelper:
         """获取会话ID"""
         return event.unified_msg_origin
 
+    def _get_sender_id(self, event: AstrMessageEvent) -> str | None:
+        """获取消息发送者ID"""
+        try:
+            sender_id = event.get_sender_id()
+            return str(sender_id) if sender_id is not None else None
+        except Exception:
+            return None
+
+    async def is_group_admin(self, event: AstrMessageEvent) -> bool:
+        """判断消息发送者是否为群管理员"""
+        try:
+            group = await event.get_group()
+        except Exception as e:
+            logger.error(f"获取群信息失败: {str(e)}")
+            return False
+        if not group:
+            return False
+        sender_id = self._get_sender_id(event)
+        if sender_id is None:
+            return False
+        admins = getattr(group, "group_admins", None) or []
+        return any(str(admin) == sender_id for admin in admins)
+
+    async def is_group_owner(self, event: AstrMessageEvent) -> bool:
+        """判断消息发送者是否为群主"""
+        try:
+            group = await event.get_group()
+        except Exception as e:
+            logger.error(f"获取群信息失败: {str(e)}")
+            return False
+        if not group:
+            return False
+        sender_id = self._get_sender_id(event)
+        if sender_id is None:
+            return False
+        owner_id = getattr(group, "group_owner", None)
+        if owner_id is None:
+            return False
+        return str(owner_id) == sender_id
+
+    async def has_group_permission(self, event: AstrMessageEvent) -> tuple[bool, str | None]:
+        """
+        群聊权限判断，私聊直接放行
+        返回: (是否有权限, 错误消息)
+        """
+        # 私聊直接放行
+        if event.is_private_chat():
+            return True, None
+
+        # 群聊需要检查权限
+        try:
+            group = await event.get_group()
+        except Exception as e:
+            logger.error(f"获取群信息失败: {str(e)}")
+            return False, "⚠️ 权限验证失败：无法获取群组信息，请稍后再试"
+
+        if not group:
+            return False, "⚠️ 权限验证失败：无法获取群组信息，请稍后再试"
+
+        sender_id = self._get_sender_id(event)
+        if sender_id is None:
+            logger.warning("无法获取发送者ID")
+            return False, "⚠️ 权限验证失败：无法获取用户信息"
+
+        # 检查是否为群主
+        owner_id = getattr(group, "group_owner", None)
+        if owner_id is not None and str(owner_id) == sender_id:
+            return True, None
+
+        # 检查是否为管理员
+        admins = getattr(group, "group_admins", None) or []
+        if any(str(admin) == sender_id for admin in admins):
+            return True, None
+
+        return False, "⛔ 权限不足：仅群管理员或群主可执行此操作"
+
     @command_error_handler
     async def handle_set_time(
         self, event: AstrMessageEvent, time_str: str
     ) -> AsyncGenerator[MessageEventResult, None]:
         """处理设置时间命令"""
+        # 权限检查
+        has_perm, error_msg = await self.has_group_permission(event)
+        if not has_perm:
+            yield event.make_result().message(error_msg)
+            return
+
         try:
             # 格式化时间字符串
             if len(time_str) == 4:  # HHMM格式
@@ -151,6 +233,12 @@ class CommandHelper:
         self, event: AstrMessageEvent
     ) -> AsyncGenerator[MessageEventResult, None]:
         """取消定时发送摸鱼图片的设置"""
+        # 权限检查
+        has_perm, error_msg = await self.has_group_permission(event)
+        if not has_perm:
+            yield event.make_result().message(error_msg)
+            return
+
         target = self.normalize_session_id(event)
         if target not in self.config_manager.group_settings:
             yield event.make_result().message("❌ 当前群聊未设置自定义时间")
@@ -214,6 +302,12 @@ class CommandHelper:
         self, event: AstrMessageEvent, trigger: str
     ) -> AsyncGenerator[MessageEventResult, None]:
         """设置触发词，默认为"摸鱼" """
+        # 权限检查
+        has_perm, error_msg = await self.has_group_permission(event)
+        if not has_perm:
+            yield event.make_result().message(error_msg)
+            return
+
         if not trigger or len(trigger.strip()) == 0:
             raise ValueError("触发词不能为空")
 
