@@ -1,7 +1,6 @@
 from astrbot.api.event import filter, AstrMessageEvent
 from astrbot.api.star import Context, Star, register
 from astrbot.api import logger
-from astrbot.api.event.filter import event_message_type, EventMessageType
 import os
 import tempfile
 import traceback
@@ -26,7 +25,6 @@ class MoyuRenPlugin(Star):
     - 在指定时间自动发送摸鱼人日历
     - 支持精确定时，无需轮询检测
     - 支持多群组不同时间设置
-    - 支持自定义触发词，默认为"摸鱼"
     - 每次按顺序选择不同的排版样式
     - 支持自定义API端点和消息模板
 
@@ -34,9 +32,9 @@ class MoyuRenPlugin(Star):
     - /set_time HH:MM - 设置发送时间，格式为24小时制
     - /reset_time - 重置当前群聊的时间设置
     - /list_time - 查看当前群聊的时间设置
-    - /next_time - 查看下一次执行的时间
     - /execute_now - 立即发送摸鱼人日历
-    - /set_trigger 触发词 - 设置触发词，默认为"摸鱼"
+    - /next_time - 查看下一次执行的时间
+    - /moyuren_help - 显示帮助信息
     """
 
     def __init__(self, context: Context, config: dict = None):
@@ -101,22 +99,22 @@ class MoyuRenPlugin(Star):
         async for result in self.command_helper.handle_list_time(event):
             yield result
 
-    @filter.command("set_trigger")
-    async def set_trigger(self, event: AstrMessageEvent, trigger: str):
-        """设置触发词，默认为"摸鱼" """
-        async for result in self.command_helper.handle_set_trigger(event, trigger):
-            yield result
-
     @filter.command("execute_now")
     async def execute_now(self, event: AstrMessageEvent):
         """立即发送摸鱼人日历"""
         async for result in self.command_helper.handle_execute_now(event):
             yield result
 
-    @event_message_type(EventMessageType.ALL)
-    async def on_all_message(self, event: AstrMessageEvent):
-        """处理消息事件，检测触发词"""
-        async for result in self.command_helper.handle_message(event):
+    @filter.command("next_time")
+    async def next_time(self, event: AstrMessageEvent):
+        """查看下一次执行时间"""
+        async for result in self.command_helper.handle_next_time(event):
+            yield result
+
+    @filter.command("moyuren_help")
+    async def moyuren_help(self, event: AstrMessageEvent):
+        """显示摸鱼人日历插件帮助信息"""
+        async for result in self.command_helper.handle_help(event):
             yield result
 
     async def terminate(self):

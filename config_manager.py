@@ -65,17 +65,13 @@ class ConfigManager:
                     logger.warning(f"跳过无效的群设置 {target}: {settings}")
                     continue
 
-                # 初始化群设置
-                self.group_settings[target] = {}
-
                 # 兼容旧版本配置，保留custom_time
                 if "custom_time" in settings:
+                    # 只有当存在有效配置时才初始化群设置
+                    if target not in self.group_settings:
+                        self.group_settings[target] = {}
                     self.group_settings[target]["custom_time"] = settings["custom_time"]
-
-                # 加载触发词设置，如果不存在则使用默认值"摸鱼"
-                self.group_settings[target]["trigger_word"] = settings.get(
-                    "trigger_word", "摸鱼"
-                )
+                # 如果只有 trigger_word 而没有 custom_time，跳过该群组（避免创建空条目）
 
             logger.info(f"已加载摸鱼人配置: {len(self.group_settings)}个群聊的设置")
             return True

@@ -1,13 +1,12 @@
 # 摸鱼人日历插件
 ![](https://private-user-images.githubusercontent.com/37870767/411299021-ead4c551-fc3c-48f7-a6f7-afbfdb820512.png?jwt=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJnaXRodWIuY29tIiwiYXVkIjoicmF3LmdpdGh1YnVzZXJjb250ZW50LmNvbSIsImtleSI6ImtleTUiLCJleHAiOjE3NDE3NjMwNDUsIm5iZiI6MTc0MTc2Mjc0NSwicGF0aCI6Ii8zNzg3MDc2Ny80MTEyOTkwMjEtZWFkNGM1NTEtZmMzYy00OGY3LWE2ZjctYWZiZmRiODIwNTEyLnBuZz9YLUFtei1BbGdvcml0aG09QVdTNC1ITUFDLVNIQTI1NiZYLUFtei1DcmVkZW50aWFsPUFLSUFWQ09EWUxTQTUzUFFLNFpBJTJGMjAyNTAzMTIlMkZ1cy1lYXN0LTElMkZzMyUyRmF3czRfcmVxdWVzdCZYLUFtei1EYXRlPTIwMjUwMzEyVDA2NTkwNVomWC1BbXotRXhwaXJlcz0zMDAmWC1BbXotU2lnbmF0dXJlPTNiNGYyZTgxMjFjOWMwZmFkMTQ1NDFhNjhiZDQwZWJiYjg1NDdmYmZkMDNlYTUwOWE3MDFiOTMwNzM5NWFjOTEmWC1BbXotU2lnbmVkSGVhZGVycz1ob3N0In0.MXqbLD4Rbn-LJsONC1os5DGpCFTKnQ8uEZnl3D8H0B8)
 
-一个功能完善的 AstrBot 摸鱼人日历插件，支持精确定时发送、多群组不同时间设置、自定义触发词，并提供多种精美排版样式。
+一个功能完善的 AstrBot 摸鱼人日历插件，支持精确定时发送、多群组不同时间设置，并提供多种精美排版样式。
 
 ## 功能特点
 
 - 🎯 精确定时发送，无需轮询检测
 - 🌟 支持多群组不同时间设置
-- 🔧 支持自定义触发词（默认为"摸鱼"）
 - 🎨 提供多种精美排版样式，每次按顺序选择
 - 💾 智能图片缓存，同一天复用减少API调用
 - ⚡ 支持立即发送功能
@@ -23,16 +22,15 @@
 - `/set_time HH:MM` - 设置发送时间，格式为24小时制
   - 例如：`/set_time 09:30` 或 `/set_time 0930`
   - 设置成功后会显示下一次发送的等待时间
-- `/reset_time` - 取消当前群聊的定时设置（触发词仍可使用）
-- `/list_time` - 查看当前群聊的时间设置与触发词
+- `/reset_time` - 取消当前群聊的定时设置
+- `/list_time` - 查看当前群聊的时间设置
 - `/execute_now` - 立即发送摸鱼人日历
-- `/set_trigger 触发词` - 设置触发词，默认为"摸鱼"
+- `/moyuren_help` - 显示帮助信息
 
-### 触发方式
+### 发送方式
 
 1. 定时发送：在设定的时间自动发送
-2. 触发词发送：检测到触发词时发送
-3. 手动发送：使用 `/execute_now` 命令立即发送
+2. 手动发送：使用 `/execute_now` 命令立即发送
 
 ### 配置文件
 
@@ -47,15 +45,12 @@
 
 ## 常见问题
 
-Q: 为什么显示获取图片失败？  
+Q: 为什么显示获取图片失败？
 A: 插件使用了多个备用API源，如果都获取失败，可能是：
 1. 在配置里增加超时时间
 2. 网络连接问题
 3. API服务暂时不可用
 4. 如果持续失败，请提交 issue 或联系作者更换API源
-
-Q: 为什么默认的触发词发送检测不到？  
-A: 请检查该群聊是否设置过时间或者触发词，如果没有设置过此群聊的消息并不在监听返回。设置后即可恢复正常
 
 Q：样式我不喜欢怎么办，我想固定一个样式，可以吗？
 A：可以的，你现在可以在AstrBot控制台的配置界面中编辑模板列表，只保留你喜欢的模板即可。
@@ -70,7 +65,6 @@ A：可以的，你现在可以在AstrBot控制台的配置界面中编辑模板
 - 🐛 修复调度器生命周期问题，正确等待任务完成
 - 🐛 修复定时任务链断裂风险，确保发送失败也会安排下一次任务
 - 🔧 模板预处理缓存，提升性能
-- 🔧 触发词长度限制（最大32字符）
 
 ### v2.3.4
 - 修复了在第一次触发后，如果不使用命令激活一次插件，可能会导致下一次定时不会触发
