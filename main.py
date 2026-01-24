@@ -1,9 +1,11 @@
 from astrbot.api.event import filter, AstrMessageEvent
 from astrbot.api.star import Context, Star, register
 from astrbot.api import logger
+from astrbot.core.utils.astrbot_path import get_astrbot_data_path
 import os
 import tempfile
 import traceback
+from pathlib import Path
 
 from .config_manager import ConfigManager
 from .image_manager import ImageManager
@@ -40,11 +42,16 @@ class MoyuRenPlugin(Star):
     def __init__(self, context: Context, config: dict = None):
         super().__init__(context)
         self.temp_dir = tempfile.mkdtemp()
-        self.config_file = os.path.join(os.path.dirname(__file__), "config.json")
+
+        # 获取插件数据目录
+        plugin_data_path = Path(get_astrbot_data_path()) / "plugin_data" / self.name
+        # 确保目录存在
+        plugin_data_path.mkdir(parents=True, exist_ok=True)
+        logger.info(f"插件数据目录: {plugin_data_path}")
 
         # 初始化各个管理器
         logger.info("开始初始化摸鱼人插件...")
-        self.config_manager = ConfigManager(self.config_file)
+        self.config_manager = ConfigManager(plugin_data_path)
 
         # 使用从AstrBot获取的配置（通过_conf_schema.json）
         self.plugin_config = config or {}
@@ -59,7 +66,7 @@ class MoyuRenPlugin(Star):
         # 加载配置
         logger.info("加载摸鱼人插件配置...")
         self.config_manager.load_config()
-        logger.info(f"当前配置: {self.config_manager.group_settings}")
+        logger.info(f"已加载 {len(self.config_manager.group_settings)} 个群聊配置")
 
         # 启动定时任务
         logger.info("启动摸鱼人插件定时任务...")

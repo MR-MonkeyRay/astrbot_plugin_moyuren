@@ -1,9 +1,10 @@
-import json
+import yaml
 import os
 from astrbot.api import logger
 import traceback
 from functools import wraps
 from typing import Dict, Any, Optional, Callable
+from pathlib import Path
 
 
 def config_operation_handler(func: Callable):
@@ -13,8 +14,8 @@ def config_operation_handler(func: Callable):
     def wrapper(self, *args, **kwargs):
         try:
             return func(self, *args, **kwargs)
-        except json.JSONDecodeError as je:
-            logger.error(f"JSON解析错误: {str(je)}")
+        except yaml.YAMLError as je:
+            logger.error(f"配置文件解析错误: {str(je)}")
             if hasattr(self, "config_file") and os.path.exists(self.config_file):
                 backup_file = f"{self.config_file}.bak"
                 os.rename(self.config_file, backup_file)
@@ -30,8 +31,8 @@ def config_operation_handler(func: Callable):
 
 
 class ConfigManager:
-    def __init__(self, config_file: str):
-        self.config_file = config_file
+    def __init__(self, config_dir: Path):
+        self.config_file = config_dir / "config.yaml"
         self.group_settings: Dict[str, Dict[str, Any]] = {}
 
     @config_operation_handler
@@ -53,11 +54,17 @@ class ConfigManager:
                 logger.warning("配置文件为空，使用默认空字典")
                 return True
 
-            loaded_settings = json.loads(loaded_data)
+            loaded_settings = yaml.safe_load(loaded_data)
+            if loaded_settings is None:
+                logger.warning("配置文件为空或仅含注释，使用默认空字典")
+                return True
             if not isinstance(loaded_settings, dict):
-                raise ValueError(
-                    f"配置文件格式错误：期望字典类型，实际为 {type(loaded_settings)}"
-                )
+                logger.error(f"配置文件格式错误：期望字典类型，实际为 {type(loaded_settings)}")
+                # 备份损坏的配置文件
+                backup_file = f"{self.config_file}.bak"
+                os.rename(self.config_file, backup_file)
+                logger.info(f"已将损坏的配置文件备份为: {backup_file}")
+                return True
 
             # 验证并加载配置
             for target, settings in loaded_settings.items():
@@ -90,6 +97,12 @@ class ConfigManager:
             )
 
         with open(self.config_file, "w", encoding="utf-8") as f:
-            json.dump(self.group_settings, f, ensure_ascii=False, indent=2)
+            yaml.safe_dump(
+                self.group_settings,
+                f,
+                default_flow_style=False,
+                allow_unicode=True,
+                sort_keys=False,
+            )
         logger.info("摸鱼人配置已保存")
         return True
