@@ -44,7 +44,7 @@ class MoyuRenPlugin(Star):
         self.temp_dir = tempfile.mkdtemp()
 
         # 获取插件数据目录
-        plugin_data_path = Path(get_astrbot_data_path()) / "plugin_data" / self.name
+        plugin_data_path = Path(get_astrbot_data_path()) / "plugin_data" / "astrbot_plugin_moyuren"
         # 确保目录存在
         plugin_data_path.mkdir(parents=True, exist_ok=True)
         logger.info(f"插件数据目录: {plugin_data_path}")
