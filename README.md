@@ -25,6 +25,8 @@
 - `/reset_time` - 取消当前群聊的定时设置
 - `/list_time` - 查看当前群聊的时间设置
 - `/execute_now` - 立即发送摸鱼人日历
+  - 支持自定义别名，默认别名：`立即摸鱼`、`摸鱼日历`
+  - 别名支持带/不带前缀，大小写不敏感
 - `/moyuren_help` - 显示帮助信息
 
 ### 发送方式
@@ -40,6 +42,7 @@
 - 消息模板：支持多种排版样式，每次按顺序选择
 - 默认模板：当没有其他模板可用时使用
 - 请求超时时间：API请求的超时设置
+- execute_now命令别名：可自定义多个别名，方便快捷触发
 
 用户可以通过AstrBot控制台的配置管理界面修改这些配置。
 
@@ -110,6 +113,5 @@ A：可以的，你现在可以在AstrBot控制台的配置界面中编辑模板
 
 ## 支持与反馈
 
-- 提交 Issue：[GitHub Issues](https://github.com/quirrel-zh/astrbot_plugin_moyuren/issues)
-- 联系作者：可在群聊中搜索 quirrel-zh
+- 提交 Issue：[GitHub Issues](https://github.com/MR-MonkeyRay/astrbot_plugin_moyuren/issues)
 - 帮助文档：[AstrBot 官方文档](https://astrbot.app/dev/plugin.html)

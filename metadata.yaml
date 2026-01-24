@@ -5,7 +5,7 @@ help: |
   - /set_time HH:MM - 设置发送时间，格式为24小时制，如 09:30 或 0930
   - /reset_time - 取消当前群聊的定时设置
   - /list_time - 查看当前群聊的时间设置
-  - /execute_now - 立即发送摸鱼人日历
+  - /execute_now - 立即发送摸鱼人日历（支持自定义别名，默认：立即摸鱼、摸鱼日历）
   - /moyuren_help - 显示帮助信息
 
   特性：
@@ -13,6 +13,7 @@ help: |
   - 支持多群组不同时间设置
   - 每次按顺序选择不同的排版样式
   - 多API源支持，自动故障转移
+  - 支持自定义命令别名，可在配置文件中设置
 version: v2.4.0 # 插件版本号。格式：v1.1.1 或者 v1.1
-author: quirrel-zh # 作者
-repo: https://github.com/quirrel-zh/astrbot_plugin_moyuren # 插件的仓库地址
+author: MonkeyRay # 作者
+repo: https://github.com/MR-MonkeyRay/astrbot_plugin_moyuren # 插件的仓库地址

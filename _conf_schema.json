@@ -72,5 +72,17 @@
     "type": "float",
     "hint": "请求API的最大等待时间，超时后会尝试下一个API",
     "default": 10.0
+  },
+  "execute_now_aliases": {
+    "description": "execute_now命令的别名列表",
+    "type": "list",
+    "hint": "可以为execute_now命令设置多个别名，方便用户使用",
+    "items": {
+      "type": "string"
+    },
+    "default": [
+      "立即摸鱼",
+      "摸鱼日历"
+    ]
   }
 } 

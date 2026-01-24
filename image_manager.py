@@ -47,7 +47,6 @@ class ImageManager:
         self.api_endpoints = config.get(
             "api_endpoints",
             [
-                "https://api.vvhan.com/api/moyu?type=json",
                 "https://api.52vmy.cn/api/wl/moyu",
             ],
         )

@@ -15,10 +15,10 @@ from .scheduler import Scheduler
 
 @register(
     "moyuren",
-    "quirrel",
+    "MonkeyRay",
     "一个功能完善的摸鱼人日历插件",
     "2.4.0",
-    "https://github.com/Quirrel-zh/astrbot_plugin_moyuren",
+    "https://github.com/MR-MonkeyRay/astrbot_plugin_moyuren",
 )
 class MoyuRenPlugin(Star):
     """摸鱼人日历插件
@@ -111,6 +111,38 @@ class MoyuRenPlugin(Star):
         """立即发送摸鱼人日历"""
         async for result in self.command_helper.handle_execute_now(event):
             yield result
+
+    @filter.custom_filter
+    async def execute_now_alias_filter(self, event: AstrMessageEvent):
+        """处理 execute_now 命令的别名"""
+        # 获取配置的别名列表
+        aliases = self.plugin_config.get("execute_now_aliases", [])
+        if not aliases:
+            return
+
+        # 检查消息是否匹配任何别名
+        message_text = (event.message_str or "").strip()
+        if not message_text:
+            return
+
+        # 移除可能的命令前缀 /
+        if message_text.startswith("/"):
+            message_text = message_text[1:]
+
+        # 规范化别名列表（去除空格和前缀，转小写）
+        normalized_aliases = set()
+        for alias in aliases:
+            alias = alias.strip()
+            if alias.startswith("/"):
+                alias = alias[1:]
+            # 排除 execute_now 本身，避免重复触发
+            if alias and alias.lower() != "execute_now":
+                normalized_aliases.add(alias.lower())
+
+        # 检查是否匹配任何别名（大小写不敏感）
+        if message_text.lower() in normalized_aliases:
+            async for result in self.command_helper.handle_execute_now(event):
+                yield result
 
     @filter.command("next_time")
     async def next_time(self, event: AstrMessageEvent):

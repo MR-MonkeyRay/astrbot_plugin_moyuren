@@ -393,11 +393,13 @@ class CommandHelper:
             "/list_time - 查看当前群聊的时间设置\n"
             "/next_time - 查看下一次执行的时间\n"
             "/execute_now - 立即发送摸鱼人日历\n"
+            "- 支持自定义别名(默认: 立即摸鱼、摸鱼日历)\n"
+            "- 可在配置文件中自定义更多别名\n"
             "/moyuren_help - 显示此帮助信息\n"
             "【使用说明】\n"
             "1. 使用 /set_time 设置每日发送时间\n"
             "2. 设置后插件会在每天指定时间自动发送摸鱼日历\n"
-            "3. 可随时使用 /execute_now 手动触发发送\n"
+            "3. 可随时使用 /execute_now 或别名手动触发发送\n"
             "4. ※群聊中仅管理员/群主可修改设置※"
         )
         yield event.make_result().message(help_text)
