@@ -3,6 +3,7 @@ from datetime import datetime, timedelta
 import heapq
 from astrbot.api import logger
 import traceback
+import astrbot.api.message_components as Comp
 from astrbot.api.event import MessageChain
 from typing import List, Tuple, Optional
 from functools import wraps
@@ -78,81 +79,79 @@ class Scheduler:
                 logger.error(f"处理群 {target} 的任务时出错: {str(e)}")
                 logger.error(traceback.format_exc())
 
-    def normalize_session_id(self, target: str) -> str:
-        """标准化会话ID格式"""
+    async def _send_moyu_message(self, target: str) -> bool:
+        """发送摸鱼人日历消息
+
+        Args:
+            target: 目标会话ID
+
+        Returns:
+            bool: 发送成功返回 True，失败返回 False
+        """
         try:
-            # 如果不包含 FriendMessage，添加它
-            if ":FriendMessage:" not in target:
-                parts = target.split("!")
-                if len(parts) == 3:  # webchat!astrbot!uuid 格式
-                    target = f"webchat:FriendMessage:{target}"
-            return target
-        except Exception as e:
-            logger.error(f"标准化会话ID时出错: {str(e)}")
-            return target  # 返回原始ID作为后备
-
-    @scheduler_error_handler
-    async def _execute_task(self, target: str, scheduled_time: datetime) -> None:
-        """执行定时任务"""
-        try:
-            now = datetime.now()
-
-            # 标准化目标ID
-            normalized_target = self.normalize_session_id(target)
-
-            # 检查群组设置
-            if normalized_target not in self.config_manager.group_settings:
-                return
-
-            settings = self.config_manager.group_settings[normalized_target]
-            if not isinstance(settings, dict) or "custom_time" not in settings:
-                return
-
-            # 获取并发送图片
+            # 获取摸鱼图片
             image_path = await self.image_manager.get_moyu_image()
             if not image_path:
-                logger.error(f"获取摸鱼人日历图片失败")
-                return
+                logger.error("获取摸鱼图片失败")
+                return False
 
-            current_datetime = now.strftime("%Y-%m-%d %H:%M")
+            # 获取当前时间
+            current_time = datetime.now().strftime("%Y-%m-%d %H:%M")
 
-            # 获取消息内容
+            # 获取模板
             template = self.image_manager._get_next_template()
 
             # 确保模板是字典类型并包含必要的键
             if not isinstance(template, dict) or "format" not in template:
-                logger.error(f"定时任务 - 模板格式不正确")
+                logger.error("模板格式不正确")
                 template = self.image_manager.default_template
 
+            # 格式化文本
             try:
-                # 格式化文本
-                text = template["format"].format(time=current_datetime)
-                logger.info(f"定时任务使用模板: {template.get('name', '未命名模板')}")
+                text = template["format"].format(time=current_time)
+                logger.info(f"使用模板: {template.get('name', '未命名模板')}")
             except Exception as e:
-                logger.error(f"定时任务 - 格式化模板时出错: {str(e)}")
-                # 使用一个简单的格式作为后备
-                text = f"摸鱼人日历\n当前时间：{current_datetime}"
+                logger.error(f"格式化模板时出错: {str(e)}")
+                text = f"摸鱼人日历\n当前时间：{current_time}"
 
-            # 创建消息段列表
-            from astrbot.api.message_components import Plain, Image
-
-            message_segments = [Plain(text), Image(file=image_path)]
-
-            # 使用send_message发送消息
-            from astrbot.api.event import MessageChain
-
+            # 构建消息
+            message_segments = [Comp.Plain(text), Comp.Image.fromFileSystem(image_path)]
             message_chain = MessageChain(message_segments)
 
-            try:
-                await self.context.send_message(normalized_target, message_chain)
-                logger.info(f"已向 {normalized_target} 发送摸鱼人日历")
-            except Exception as e:
-                logger.error(f"向 {normalized_target} 发送消息失败：{str(e)}")
-                logger.error(traceback.format_exc())
+            # 发送消息
+            await self.context.send_message(target, message_chain)
+            logger.info(f"已向 {target} 发送摸鱼人日历")
+            return True
+
+        except Exception as e:
+            logger.error(f"发送摸鱼消息失败: {str(e)}")
+            logger.error(traceback.format_exc())
+            return False
+
+    @scheduler_error_handler
+    async def _execute_task(self, target: str, scheduled_time: datetime) -> None:
+        """执行定时任务"""
+        now = datetime.now()
+
+        # 获取群组设置
+        settings = None
+        try:
+            if target not in self.config_manager.group_settings:
                 return
 
-            # 计算下一次执行时间
-            try:
+            settings = self.config_manager.group_settings[target]
+            if not isinstance(settings, dict) or "custom_time" not in settings:
+                return
+        except Exception as e:
+            logger.error(f"检查群组设置时出错: {str(e)}")
+            return
+
+        # 发送消息
+        await self._send_moyu_message(target)
+
+        # 无论成功或失败，都安排下一次任务
+        try:
+            if settings:
                 hour, minute = map(int, settings["custom_time"].split(":"))
                 next_time = (now + timedelta(days=1)).replace(
                     hour=hour, minute=minute, second=0, microsecond=0
@@ -161,11 +160,8 @@ class Scheduler:
                 # 添加下一次定时任务到队列
                 heapq.heappush(self.task_queue, (next_time, target))
                 logger.info(f"已添加下一次定时任务，执行时间：{next_time.strftime('%Y-%m-%d %H:%M')}")
-            except Exception as e:
-                logger.error(f"更新下一次执行时间失败: {str(e)}")
-                logger.error(traceback.format_exc())
         except Exception as e:
-            logger.error(f"执行任务时出错: {str(e)}")
+            logger.error(f"更新下一次执行时间失败: {str(e)}")
             logger.error(traceback.format_exc())
 
     @scheduler_error_handler
@@ -237,6 +233,10 @@ class Scheduler:
         """停止定时任务"""
         if self.scheduled_task_ref:
             self.scheduled_task_ref.cancel()
+            try:
+                await self.scheduled_task_ref
+            except asyncio.CancelledError:
+                logger.info("定时任务已被取消")
             self.scheduled_task_ref = None
 
     def remove_task(self, target: str) -> bool:
@@ -249,9 +249,6 @@ class Scheduler:
             bool: 是否成功删除任务
         """
         try:
-            # 标准化目标ID
-            normalized_target = self.normalize_session_id(target)
-
             # 创建新的任务队列，排除指定目标的任务
             new_queue = []
             removed = False
@@ -262,7 +259,7 @@ class Scheduler:
                 time, task_target = task
 
                 # 如果不是要删除的目标，则保留
-                if self.normalize_session_id(task_target) != normalized_target:
+                if task_target != target:
                     new_queue.append(task)
                 else:
                     removed = True
@@ -277,49 +274,3 @@ class Scheduler:
             logger.error(f"删除任务时出错: {str(e)}")
             logger.error(traceback.format_exc())
             return False
-
-    async def _send_scheduled_message(self, session_id: str) -> None:
-        """发送定时消息"""
-        try:
-            # 获取摸鱼图片
-            image_path = await self.image_manager.get_moyu_image()
-            if not image_path:
-                logger.error(f"获取摸鱼图片失败，跳过定时发送")
-                return
-
-            # 获取当前时间
-            current_time = datetime.now().strftime("%Y-%m-%d %H:%M")
-
-            # 获取随机模板
-            template = self.image_manager._get_next_template()
-
-            # 确保模板是字典类型并包含必要的键
-            if not isinstance(template, dict) or "format" not in template:
-                logger.error(f"定时任务 - 模板格式不正确")
-                template = self.image_manager.default_template
-
-            try:
-                # 格式化文本
-                text = template["format"].format(time=current_time)
-                logger.info(f"定时任务使用模板: {template.get('name', '未命名模板')}")
-            except Exception as e:
-                logger.error(f"定时任务 - 格式化模板时出错: {str(e)}")
-                # 使用一个简单的格式作为后备
-                text = f"摸鱼人日历\n当前时间：{current_time}"
-
-            # 创建消息
-            from astrbot.api.message_components import Plain, Image
-
-            message_segments = [Plain(text), Image(file=image_path)]
-
-            # 发送消息
-            from astrbot.api.event import MessageChain
-
-            message_chain = MessageChain(message_segments)
-            await self.context.send_message(session_id, message_chain)
-
-            logger.info(f"已向 {session_id} 发送摸鱼人日历")
-
-        except Exception as e:
-            logger.error(f"发送定时消息失败: {str(e)}")
-            logger.error(traceback.format_exc())

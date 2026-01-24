@@ -7,7 +7,6 @@
       "type": "string"
     },
     "default": [
-      "https://api.vvhan.com/api/moyu",
       "https://api.52vmy.cn/api/wl/moyu",
       "https://dayu.qqsuu.cn/moyuribao/apis.php"
     ]

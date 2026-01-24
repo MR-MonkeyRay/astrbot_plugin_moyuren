@@ -1,5 +1,6 @@
-from astrbot.api.event import AstrMessageEvent, MessageEventResult, MessageChain
+from astrbot.api.event import AstrMessageEvent, MessageEventResult
 from astrbot.api import logger
+import astrbot.api.message_components as Comp
 from datetime import datetime, timedelta
 import re
 import traceback
@@ -66,19 +67,96 @@ class CommandHelper:
         return hour, minute
 
     def normalize_session_id(self, event: AstrMessageEvent) -> str:
-        """标准化会话ID，确保格式一致"""
+        """获取会话ID"""
+        return event.unified_msg_origin
+
+    def _get_sender_id(self, event: AstrMessageEvent) -> str | None:
+        """获取消息发送者ID"""
         try:
-            target = event.unified_msg_origin
-            return target
+            sender_id = event.get_sender_id()
+            return str(sender_id) if sender_id is not None else None
+        except Exception:
+            return None
+
+    async def is_group_admin(self, event: AstrMessageEvent) -> bool:
+        """判断消息发送者是否为群管理员"""
+        try:
+            group = await event.get_group()
         except Exception as e:
-            logger.error(f"标准化会话ID时出错: {str(e)}")
-            return event.unified_msg_origin  # 返回原始ID作为后备
+            logger.error(f"获取群信息失败: {str(e)}")
+            return False
+        if not group:
+            return False
+        sender_id = self._get_sender_id(event)
+        if sender_id is None:
+            return False
+        admins = getattr(group, "group_admins", None) or []
+        return any(str(admin) == sender_id for admin in admins)
+
+    async def is_group_owner(self, event: AstrMessageEvent) -> bool:
+        """判断消息发送者是否为群主"""
+        try:
+            group = await event.get_group()
+        except Exception as e:
+            logger.error(f"获取群信息失败: {str(e)}")
+            return False
+        if not group:
+            return False
+        sender_id = self._get_sender_id(event)
+        if sender_id is None:
+            return False
+        owner_id = getattr(group, "group_owner", None)
+        if owner_id is None:
+            return False
+        return str(owner_id) == sender_id
+
+    async def has_group_permission(self, event: AstrMessageEvent) -> tuple[bool, str | None]:
+        """
+        群聊权限判断，私聊直接放行
+        返回: (是否有权限, 错误消息)
+        """
+        # 私聊直接放行
+        if event.is_private_chat():
+            return True, None
+
+        # 群聊需要检查权限
+        try:
+            group = await event.get_group()
+        except Exception as e:
+            logger.error(f"获取群信息失败: {str(e)}")
+            return False, "⚠️ 权限验证失败：无法获取群组信息，请稍后再试"
+
+        if not group:
+            return False, "⚠️ 权限验证失败：无法获取群组信息，请稍后再试"
+
+        sender_id = self._get_sender_id(event)
+        if sender_id is None:
+            logger.warning("无法获取发送者ID")
+            return False, "⚠️ 权限验证失败：无法获取用户信息"
+
+        # 检查是否为群主
+        owner_id = getattr(group, "group_owner", None)
+        if owner_id is not None and str(owner_id) == sender_id:
+            return True, None
+
+        # 检查是否为管理员
+        admins = getattr(group, "group_admins", None) or []
+        if any(str(admin) == sender_id for admin in admins):
+            return True, None
+
+        return False, "⛔ 权限不足：仅群管理员或群主可执行此操作"
 
     @command_error_handler
     async def handle_set_time(
         self, event: AstrMessageEvent, time_str: str
     ) -> AsyncGenerator[MessageEventResult, None]:
         """处理设置时间命令"""
+        # 权限检查
+        has_perm, error_msg = await self.has_group_permission(event)
+        if not has_perm:
+            yield event.make_result().message(error_msg)
+            return
+
         try:
             # 格式化时间字符串
             if len(time_str) == 4:  # HHMM格式
@@ -151,10 +229,16 @@ class CommandHelper:
             yield event.make_result().message("❌ 设置时间时出错，请查看日志")
 
     @command_error_handler
-    async def handle_reset_time(
+    async def handle_clear_time(
         self, event: AstrMessageEvent
     ) -> AsyncGenerator[MessageEventResult, None]:
         """取消定时发送摸鱼图片的设置"""
+        # 权限检查
+        has_perm, error_msg = await self.has_group_permission(event)
+        if not has_perm:
+            yield event.make_result().message(error_msg)
+            return
+
         target = self.normalize_session_id(event)
         if target not in self.config_manager.group_settings:
             yield event.make_result().message("❌ 当前群聊未设置自定义时间")
@@ -168,18 +252,12 @@ class CommandHelper:
         # 获取当前时间设置，用于显示
         current_time = self.config_manager.group_settings[target]["custom_time"]
 
-        # 保留触发词设置
-        trigger_word = self.config_manager.group_settings[target].get(
-            "trigger_word", "摸鱼"
-        )
-
         # 重置时间设置
         if "custom_time" in self.config_manager.group_settings[target]:
             del self.config_manager.group_settings[target]["custom_time"]
 
-        # 如果没有其他设置，则保持触发词
         if len(self.config_manager.group_settings[target]) == 0:
-            self.config_manager.group_settings[target] = {"trigger_word": trigger_word}
+            del self.config_manager.group_settings[target]
 
         self.config_manager.save_config()
 
@@ -193,7 +271,7 @@ class CommandHelper:
             self.scheduler.wakeup_event.set()
 
         yield event.make_result().message(
-            f"✅ 已取消定时发送\n原定时间：{current_time}\n触发词仍可正常使用"
+            f"✅ 已取消定时发送\n原定时间：{current_time}"
         )
 
     @command_error_handler
@@ -207,30 +285,10 @@ class CommandHelper:
             return
 
         settings = self.config_manager.group_settings[target]
-        trigger_word = settings.get("trigger_word", "摸鱼")
         time_setting = settings.get("custom_time", "未设置")
         yield event.make_result().message(
-            f"当前群聊设置:\n发送时间: {time_setting}\n触发词: {trigger_word}"
+            f"当前群聊设置:\n发送时间: {time_setting}"
         )
-
-    @command_error_handler
-    async def handle_set_trigger(
-        self, event: AstrMessageEvent, trigger: str
-    ) -> AsyncGenerator[MessageEventResult, None]:
-        """设置触发词，默认为"摸鱼" """
-        if not trigger or len(trigger.strip()) == 0:
-            raise ValueError("触发词不能为空")
-
-        target = self.normalize_session_id(event)
-        trigger = trigger.strip()
-
-        if target not in self.config_manager.group_settings:
-            self.config_manager.group_settings[target] = {"trigger_word": trigger}
-        else:
-            self.config_manager.group_settings[target]["trigger_word"] = trigger
-
-        self.config_manager.save_config()
-        yield event.make_result().message(f"✅ 已设置触发词为: {trigger}")
 
     @command_error_handler
     async def handle_execute_now(
@@ -262,9 +320,7 @@ class CommandHelper:
                 text = f"摸鱼人日历\n当前时间：{current_time}"
 
             # 创建简单的消息段列表传递给chain_result
-            from astrbot.api.message_components import Plain, Image
-
-            message_segments = [Plain(text), Image(file=image_path)]
+            message_segments = [Comp.Plain(text), Comp.Image.fromFileSystem(image_path)]
 
             # 使用消息段列表
             yield event.chain_result(message_segments)
@@ -276,60 +332,77 @@ class CommandHelper:
                 "发送摸鱼人日历失败，请查看日志获取详细信息"
             )
 
-    async def handle_message(self, event: AstrMessageEvent) -> None:
-        """处理消息事件，检测触发词"""
-        # 获取消息内容和来源
-        message_text = event.message_obj.message_str
+    @command_error_handler
+    async def handle_next_time(
+        self, event: AstrMessageEvent
+    ) -> AsyncGenerator[MessageEventResult, None]:
+        """查看下一次执行时间"""
+        if not self.scheduler or not hasattr(self.scheduler, "task_queue"):
+            yield event.make_result().message(
+                "调度器未初始化，无法获取下一次执行时间"
+            )
+            return
+
         target = self.normalize_session_id(event)
+        next_time = None
+        for scheduled_time, scheduled_target in self.scheduler.task_queue:
+            if scheduled_target != target:
+                continue
+            if next_time is None or scheduled_time < next_time:
+                next_time = scheduled_time
 
-        # 如果是命令消息或群未配置，则跳过处理
-        if (
-            message_text.startswith("/")
-            or target not in self.config_manager.group_settings
-        ):
+        if not next_time:
+            yield event.make_result().message("当前群聊未设置定时发送")
             return
 
-        # 获取触发词并检查
-        trigger_word = self.config_manager.group_settings[target].get(
-            "trigger_word", "摸鱼"
+        now = datetime.now()
+        wait_seconds = int((next_time - now).total_seconds())
+        if wait_seconds < 0:
+            wait_seconds = 0
+
+        hours = wait_seconds // 3600
+        minutes = (wait_seconds % 3600) // 60
+        seconds = wait_seconds % 60
+
+        wait_time_str = ""
+        if hours > 0:
+            wait_time_str += f"{hours}小时"
+        if minutes > 0:
+            wait_time_str += f"{minutes}分钟"
+        if seconds > 0 or not wait_time_str:
+            wait_time_str += f"{seconds}秒"
+
+        next_time_str = next_time.strftime("%Y-%m-%d %H:%M")
+        yield event.make_result().message(
+            f"下一次执行时间：{next_time_str}\n距离现在还有：{wait_time_str}"
         )
-        if trigger_word not in message_text:
-            return
 
-        # 获取并发送摸鱼图片
-        try:
-            image_path = await self.image_manager.get_moyu_image()
-            if not image_path:
-                return
-
-            current_time = datetime.now().strftime("%Y-%m-%d %H:%M")
-
-            # 获取消息内容
-            template = self.image_manager._get_next_template()
-
-            # 确保模板是字典类型并包含必要的键
-            if not isinstance(template, dict) or "format" not in template:
-                logger.error(f"触发词响应 - 模板格式不正确")
-                template = self.image_manager.default_template
-
-            try:
-                text = template["format"].format(time=current_time)
-                logger.info(f"触发词响应使用模板: {template.get('name', '未命名模板')}")
-            except Exception as e:
-                logger.error(f"触发词响应 - 格式化模板时出错: {str(e)}")
-                # 使用一个简单的格式作为后备
-                text = f"摸鱼人日历\n当前时间：{current_time}"
-
-            # 创建消息段列表
-            from astrbot.api.message_components import Plain, Image
-
-            message_segments = [Plain(text), Image(file=image_path)]
-
-            # 使用send_message直接发送消息段列表
-            from astrbot.api.event import MessageChain
-
-            message_chain = MessageChain(message_segments)
-            await self.context.send_message(target, message_chain)
-        except Exception as e:
-            logger.error(f"发送摸鱼人日历失败: {str(e)}")
-            logger.error(traceback.format_exc())
+    @command_error_handler
+    async def handle_help(
+        self, event: AstrMessageEvent
+    ) -> AsyncGenerator[MessageEventResult, None]:
+        """显示插件帮助信息"""
+        help_text = (
+            "📅 摸鱼人日历插件\n"
+            "【功能简介】\n"
+            "每天定时发送摸鱼人日历图片，支持多群组独立配置。\n"
+            "【命令列表】\n"
+            "/set_time HH:MM 或 HHMM - 设置定时发送时间(24小时制)\n"
+            "- 示例: /set_time 09:30 或 /set_time 0930\n"
+            "/clear_time - 清除当前群聊的定时设置\n"
+            "- 别名: 清除摸鱼时间\n"
+            "/list_time - 查看当前群聊的时间设置\n"
+            "- 别名: 查看摸鱼时间\n"
+            "/next_time - 查看下一次执行的时间\n"
+            "- 别名: 下次摸鱼时间\n"
+            "/execute_now - 立即发送摸鱼人日历\n"
+            "- 别名: 立即摸鱼, 摸鱼日历\n"
+            "/moyuren_help - 显示此帮助信息\n"
+            "- 别名: 摸鱼帮助\n"
+            "【使用说明】\n"
+            "1. 使用 /set_time 设置每日发送时间\n"
+            "2. 设置后插件会在每天指定时间自动发送摸鱼日历\n"
+            "3. 可随时使用 /execute_now 或别名手动触发发送\n"
+            "4. ※群聊中仅管理员/群主可修改设置※"
+        )
+        yield event.make_result().message(help_text)

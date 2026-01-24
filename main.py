@@ -1,10 +1,11 @@
 from astrbot.api.event import filter, AstrMessageEvent
 from astrbot.api.star import Context, Star, register
 from astrbot.api import logger
-from astrbot.api.event.filter import event_message_type, EventMessageType
+from astrbot.core.utils.astrbot_path import get_astrbot_data_path
 import os
 import tempfile
 import traceback
+from pathlib import Path
 
 from .config_manager import ConfigManager
 from .image_manager import ImageManager
@@ -14,10 +15,10 @@ from .scheduler import Scheduler
 
 @register(
     "moyuren",
-    "quirrel",
+    "MonkeyRay",
     "一个功能完善的摸鱼人日历插件",
-    "2.3.4",
-    "https://github.com/Quirrel-zh/astrbot_plugin_moyuren",
+    "2.4.0",
+    "https://github.com/MR-MonkeyRay/astrbot_plugin_moyuren",
 )
 class MoyuRenPlugin(Star):
     """摸鱼人日历插件
@@ -26,27 +27,31 @@ class MoyuRenPlugin(Star):
     - 在指定时间自动发送摸鱼人日历
     - 支持精确定时，无需轮询检测
     - 支持多群组不同时间设置
-    - 支持自定义触发词，默认为"摸鱼"
     - 每次按顺序选择不同的排版样式
     - 支持自定义API端点和消息模板
 
     命令：
     - /set_time HH:MM - 设置发送时间，格式为24小时制
-    - /reset_time - 重置当前群聊的时间设置
+    - /clear_time - 清除当前群聊的时间设置
     - /list_time - 查看当前群聊的时间设置
-    - /next_time - 查看下一次执行的时间
     - /execute_now - 立即发送摸鱼人日历
-    - /set_trigger 触发词 - 设置触发词，默认为"摸鱼"
+    - /next_time - 查看下一次执行的时间
+    - /moyuren_help - 显示帮助信息
     """
 
     def __init__(self, context: Context, config: dict = None):
         super().__init__(context)
         self.temp_dir = tempfile.mkdtemp()
-        self.config_file = os.path.join(os.path.dirname(__file__), "config.json")
+
+        # 获取插件数据目录
+        plugin_data_path = Path(get_astrbot_data_path()) / "plugin_data" / "astrbot_plugin_moyuren"
+        # 确保目录存在
+        plugin_data_path.mkdir(parents=True, exist_ok=True)
+        logger.info(f"插件数据目录: {plugin_data_path}")
 
         # 初始化各个管理器
         logger.info("开始初始化摸鱼人插件...")
-        self.config_manager = ConfigManager(self.config_file)
+        self.config_manager = ConfigManager(plugin_data_path)
 
         # 使用从AstrBot获取的配置（通过_conf_schema.json）
         self.plugin_config = config or {}
@@ -61,14 +66,16 @@ class MoyuRenPlugin(Star):
         # 加载配置
         logger.info("加载摸鱼人插件配置...")
         self.config_manager.load_config()
-        logger.info(f"当前配置: {self.config_manager.group_settings}")
+        logger.info(f"已加载 {len(self.config_manager.group_settings)} 个群聊配置")
 
         # 启动定时任务
         logger.info("启动摸鱼人插件定时任务...")
         self.scheduler.start()
         # 立即更新任务队列
         self.scheduler.update_task_queue()
-        
+        # 唤醒调度器处理初始任务
+        self.scheduler.wakeup_event.set()
+
         # 记录任务队列初始状态
         if hasattr(self.scheduler, 'task_queue') and self.scheduler.task_queue:
             queue_info = [(dt.strftime("%Y-%m-%d %H:%M"), tgt) for dt, tgt in self.scheduler.task_queue]
@@ -81,40 +88,41 @@ class MoyuRenPlugin(Star):
         # 保存实例引用
         MoyuRenPlugin._instance = self
 
-    @filter.command("set_time")
+    @filter.command("set_time", alias=("设置摸鱼时间",))
     async def set_time(self, event: AstrMessageEvent, time: str):
         """设置发送摸鱼图片的时间 格式为 HH:MM或HHMM"""
         async for result in self.command_helper.handle_set_time(event, time):
             yield result
 
-    @filter.command("reset_time")
-    async def reset_time(self, event: AstrMessageEvent):
-        """重置发送摸鱼图片的时间"""
-        async for result in self.command_helper.handle_reset_time(event):
+    @filter.command("clear_time", alias=("清除摸鱼时间",))
+    async def clear_time(self, event: AstrMessageEvent):
+        """清除当前群聊的定时设置"""
+        async for result in self.command_helper.handle_clear_time(event):
             yield result
 
-    @filter.command("list_time")
+    @filter.command("list_time", alias=("查看摸鱼时间",))
     async def list_time(self, event: AstrMessageEvent):
         """列出当前群聊的时间设置"""
         async for result in self.command_helper.handle_list_time(event):
             yield result
 
-    @filter.command("set_trigger")
-    async def set_trigger(self, event: AstrMessageEvent, trigger: str):
-        """设置触发词，默认为"摸鱼" """
-        async for result in self.command_helper.handle_set_trigger(event, trigger):
-            yield result
-
-    @filter.command("execute_now")
+    @filter.command("execute_now", alias=("立即摸鱼", "摸鱼日历"))
     async def execute_now(self, event: AstrMessageEvent):
         """立即发送摸鱼人日历"""
         async for result in self.command_helper.handle_execute_now(event):
             yield result
 
-    @event_message_type(EventMessageType.ALL)
-    async def on_all_message(self, event: AstrMessageEvent):
-        """处理消息事件，检测触发词"""
-        await self.command_helper.handle_message(event)
+    @filter.command("next_time", alias=("下次摸鱼时间",))
+    async def next_time(self, event: AstrMessageEvent):
+        """查看下一次执行时间"""
+        async for result in self.command_helper.handle_next_time(event):
+            yield result
+
+    @filter.command("moyuren_help", alias=("摸鱼帮助",))
+    async def moyuren_help(self, event: AstrMessageEvent):
+        """显示摸鱼人日历插件帮助信息"""
+        async for result in self.command_helper.handle_help(event):
+            yield result
 
     async def terminate(self):
         """终止插件的所有活动"""
@@ -128,6 +136,11 @@ class MoyuRenPlugin(Star):
             # 停止定时任务
             await instance.scheduler.stop()
             logger.info("摸鱼人日历定时任务已停止")
+
+            # 关闭 image_manager 的 session
+            if hasattr(instance, "image_manager"):
+                await instance.image_manager.close()
+                logger.info("已关闭图片管理器网络会话")
 
             # 清理临时文件
             if hasattr(instance, "temp_dir") and os.path.exists(instance.temp_dir):
