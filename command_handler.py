@@ -229,7 +229,7 @@ class CommandHelper:
             yield event.make_result().message("❌ 设置时间时出错，请查看日志")
 
     @command_error_handler
-    async def handle_reset_time(
+    async def handle_clear_time(
         self, event: AstrMessageEvent
     ) -> AsyncGenerator[MessageEventResult, None]:
         """取消定时发送摸鱼图片的设置"""
@@ -388,14 +388,17 @@ class CommandHelper:
             "每天定时发送摸鱼人日历图片，支持多群组独立配置。\n"
             "【命令列表】\n"
             "/set_time HH:MM 或 HHMM - 设置定时发送时间(24小时制)\n"
-            "- [示例: /set_time 09:30 或 /set_time 0930]\n"
-            "/reset_time - 重置当前群聊的定时设置(设置为空)\n"
+            "- 示例: /set_time 09:30 或 /set_time 0930\n"
+            "/clear_time - 清除当前群聊的定时设置\n"
+            "- 别名: 清除摸鱼时间\n"
             "/list_time - 查看当前群聊的时间设置\n"
+            "- 别名: 查看摸鱼时间\n"
             "/next_time - 查看下一次执行的时间\n"
+            "- 别名: 下次摸鱼时间\n"
             "/execute_now - 立即发送摸鱼人日历\n"
-            "- 支持自定义别名(默认: 立即摸鱼、摸鱼日历)\n"
-            "- 可在配置文件中自定义更多别名\n"
+            "- 别名: 立即摸鱼, 摸鱼日历\n"
             "/moyuren_help - 显示此帮助信息\n"
+            "- 别名: 摸鱼帮助\n"
             "【使用说明】\n"
             "1. 使用 /set_time 设置每日发送时间\n"
             "2. 设置后插件会在每天指定时间自动发送摸鱼日历\n"

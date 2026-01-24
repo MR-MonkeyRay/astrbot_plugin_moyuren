@@ -32,7 +32,7 @@ class MoyuRenPlugin(Star):
 
     命令：
     - /set_time HH:MM - 设置发送时间，格式为24小时制
-    - /reset_time - 重置当前群聊的时间设置
+    - /clear_time - 清除当前群聊的时间设置
     - /list_time - 查看当前群聊的时间设置
     - /execute_now - 立即发送摸鱼人日历
     - /next_time - 查看下一次执行的时间
@@ -88,69 +88,37 @@ class MoyuRenPlugin(Star):
         # 保存实例引用
         MoyuRenPlugin._instance = self
 
-    @filter.command("set_time")
+    @filter.command("set_time", alias=("设置摸鱼时间",))
     async def set_time(self, event: AstrMessageEvent, time: str):
         """设置发送摸鱼图片的时间 格式为 HH:MM或HHMM"""
         async for result in self.command_helper.handle_set_time(event, time):
             yield result
 
-    @filter.command("reset_time")
-    async def reset_time(self, event: AstrMessageEvent):
-        """重置发送摸鱼图片的时间"""
-        async for result in self.command_helper.handle_reset_time(event):
+    @filter.command("clear_time", alias=("清除摸鱼时间",))
+    async def clear_time(self, event: AstrMessageEvent):
+        """清除当前群聊的定时设置"""
+        async for result in self.command_helper.handle_clear_time(event):
             yield result
 
-    @filter.command("list_time")
+    @filter.command("list_time", alias=("查看摸鱼时间",))
     async def list_time(self, event: AstrMessageEvent):
         """列出当前群聊的时间设置"""
         async for result in self.command_helper.handle_list_time(event):
             yield result
 
-    @filter.command("execute_now")
+    @filter.command("execute_now", alias=("立即摸鱼", "摸鱼日历"))
     async def execute_now(self, event: AstrMessageEvent):
         """立即发送摸鱼人日历"""
         async for result in self.command_helper.handle_execute_now(event):
             yield result
 
-    @filter.custom_filter
-    async def execute_now_alias_filter(self, event: AstrMessageEvent):
-        """处理 execute_now 命令的别名"""
-        # 获取配置的别名列表
-        aliases = self.plugin_config.get("execute_now_aliases", [])
-        if not aliases:
-            return
-
-        # 检查消息是否匹配任何别名
-        message_text = (event.message_str or "").strip()
-        if not message_text:
-            return
-
-        # 移除可能的命令前缀 /
-        if message_text.startswith("/"):
-            message_text = message_text[1:]
-
-        # 规范化别名列表（去除空格和前缀，转小写）
-        normalized_aliases = set()
-        for alias in aliases:
-            alias = alias.strip()
-            if alias.startswith("/"):
-                alias = alias[1:]
-            # 排除 execute_now 本身，避免重复触发
-            if alias and alias.lower() != "execute_now":
-                normalized_aliases.add(alias.lower())
-
-        # 检查是否匹配任何别名（大小写不敏感）
-        if message_text.lower() in normalized_aliases:
-            async for result in self.command_helper.handle_execute_now(event):
-                yield result
-
-    @filter.command("next_time")
+    @filter.command("next_time", alias=("下次摸鱼时间",))
     async def next_time(self, event: AstrMessageEvent):
         """查看下一次执行时间"""
         async for result in self.command_helper.handle_next_time(event):
             yield result
 
-    @filter.command("moyuren_help")
+    @filter.command("moyuren_help", alias=("摸鱼帮助",))
     async def moyuren_help(self, event: AstrMessageEvent):
         """显示摸鱼人日历插件帮助信息"""
         async for result in self.command_helper.handle_help(event):
