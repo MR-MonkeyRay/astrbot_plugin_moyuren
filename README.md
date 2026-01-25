@@ -1,7 +1,37 @@
 # 摸鱼人日历插件
-![](https://private-user-images.githubusercontent.com/37870767/411299021-ead4c551-fc3c-48f7-a6f7-afbfdb820512.png?jwt=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJnaXRodWIuY29tIiwiYXVkIjoicmF3LmdpdGh1YnVzZXJjb250ZW50LmNvbSIsImtleSI6ImtleTUiLCJleHAiOjE3NDE3NjMwNDUsIm5iZiI6MTc0MTc2Mjc0NSwicGF0aCI6Ii8zNzg3MDc2Ny80MTEyOTkwMjEtZWFkNGM1NTEtZmMzYy00OGY3LWE2ZjctYWZiZmRiODIwNTEyLnBuZz9YLUFtei1BbGdvcml0aG09QVdTNC1ITUFDLVNIQTI1NiZYLUFtei1DcmVkZW50aWFsPUFLSUFWQ09EWUxTQTUzUFFLNFpBJTJGMjAyNTAzMTIlMkZ1cy1lYXN0LTElMkZzMyUyRmF3czRfcmVxdWVzdCZYLUFtei1EYXRlPTIwMjUwMzEyVDA2NTkwNVomWC1BbXotRXhwaXJlcz0zMDAmWC1BbXotU2lnbmF0dXJlPTNiNGYyZTgxMjFjOWMwZmFkMTQ1NDFhNjhiZDQwZWJiYjg1NDdmYmZkMDNlYTUwOWE3MDFiOTMwNzM5NWFjOTEmWC1BbXotU2lnbmVkSGVhZGVycz1ob3N0In0.MXqbLD4Rbn-LJsONC1os5DGpCFTKnQ8uEZnl3D8H0B8)
+![摸鱼人日历](assests/moyu-api.png)
 
 一个功能完善的 AstrBot 摸鱼人日历插件，支持精确定时发送、多群组不同时间设置，并提供多种精美排版样式。
+
+## 安装
+
+### 通过 AstrBot 插件市场安装（推荐）
+
+1. 在 AstrBot 控制台中打开插件市场
+2. 搜索"摸鱼人日历"
+3. 点击安装
+
+### 手动安装
+
+1. 克隆或下载本仓库到 AstrBot 的插件目录
+2. 安装依赖：
+
+```bash
+pip install -r requirements.txt
+```
+
+### 依赖说明
+
+本插件需要以下依赖：
+
+- **aiohttp** - 异步 HTTP 客户端，用于获取摸鱼日历图片
+- **PyYAML** - YAML 配置文件解析
+
+这些依赖通常会随 AstrBot 一起安装，如果遇到导入错误，请手动安装：
+
+```bash
+pip install aiohttp PyYAML
+```
 
 ## 功能特点
 
@@ -72,6 +102,7 @@ A：可以的，你现在可以在AstrBot控制台的配置界面中编辑模板
 - 📦 **导入优化**：使用相对导入，提升模块加载稳定性
 - 🧹 **代码清理**：移除导入时的副作用，所有初始化操作封装到函数中
 - 📝 **日志统一**：统一使用 `astrbot.api.logger`
+- ✅ **测试框架**：建立完整的单元测试框架
 
 ### v2.4.0
 - 🔧 重构图片管理器，实现图片缓存机制，同一天复用缓存图片
@@ -129,3 +160,4 @@ A：可以的，你现在可以在AstrBot控制台的配置界面中编辑模板
 
 - 提交 Issue：[GitHub Issues](https://github.com/MR-MonkeyRay/astrbot_plugin_moyuren/issues)
 - 帮助文档：[AstrBot 官方文档](https://astrbot.app/dev/plugin.html)
+- 

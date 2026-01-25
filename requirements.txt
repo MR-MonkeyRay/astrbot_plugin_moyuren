@@ -1,0 +1,10 @@
+# AstrBot 摸鱼人日历插件 - 运行时依赖
+
+# AstrBot 框架（由 AstrBot 提供，无需单独安装）
+# astrbot>=3.0.0
+
+# 异步 HTTP 客户端
+aiohttp>=3.8.0
+
+# YAML 配置文件解析
+PyYAML>=6.0
