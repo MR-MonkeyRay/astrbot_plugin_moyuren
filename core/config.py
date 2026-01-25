@@ -1,33 +1,9 @@
 import yaml
 import os
 from astrbot.api import logger
-import traceback
-from functools import wraps
-from typing import Dict, Any, Optional, Callable
+from typing import Dict, Any, Optional
 from pathlib import Path
-
-
-def config_operation_handler(func: Callable):
-    """配置操作错误处理装饰器"""
-
-    @wraps(func)
-    def wrapper(self, *args, **kwargs):
-        try:
-            return func(self, *args, **kwargs)
-        except yaml.YAMLError as je:
-            logger.error(f"配置文件解析错误: {str(je)}")
-            if hasattr(self, "config_file") and os.path.exists(self.config_file):
-                backup_file = f"{self.config_file}.bak"
-                os.rename(self.config_file, backup_file)
-                logger.info(f"已将损坏的配置文件备份为: {backup_file}")
-        except (IOError, OSError) as e:
-            logger.error(f"文件操作错误: {str(e)}")
-        except Exception as e:
-            logger.error(f"{func.__name__} 执行出错: {str(e)}")
-            logger.error(traceback.format_exc())
-        return None
-
-    return wrapper
+from ..utils.decorators import config_operation_handler
 
 
 class ConfigManager:

@@ -1,32 +1,12 @@
 import aiohttp
 from datetime import datetime
 from astrbot.api import logger
-import traceback
 import os
 import asyncio
 import uuid
 from typing import List, Optional, Union, Dict
-from functools import wraps
 import json
-
-
-def image_operation_handler(func):
-    """图片操作错误处理装饰器"""
-
-    @wraps(func)
-    async def wrapper(*args, **kwargs):
-        try:
-            return await func(*args, **kwargs)
-        except aiohttp.ClientError as e:
-            logger.error(f"网络请求错误: {str(e)}")
-        except asyncio.TimeoutError:
-            logger.error("请求超时")
-        except Exception as e:
-            logger.error(f"{func.__name__} 执行出错: {str(e)}")
-            logger.error(traceback.format_exc())
-        return None
-
-    return wrapper
+from ..utils.decorators import image_operation_handler
 
 
 class ImageManager:

@@ -2,30 +2,10 @@ import asyncio
 from datetime import datetime, timedelta
 import heapq
 from astrbot.api import logger
-import traceback
 import astrbot.api.message_components as Comp
 from astrbot.api.event import MessageChain
 from typing import List, Tuple, Optional
-from functools import wraps
-
-
-def scheduler_error_handler(func):
-    """调度器错误处理装饰器"""
-
-    @wraps(func)
-    async def wrapper(*args, **kwargs):
-        try:
-            return await func(*args, **kwargs)
-        except asyncio.CancelledError:
-            raise
-        except Exception as e:
-            logger.error(f"{func.__name__} 执行出错: {str(e)}")
-            logger.error(traceback.format_exc())
-            # 出错后等待一段时间再继续
-            await asyncio.sleep(60)
-            return None
-
-    return wrapper
+from ..utils.decorators import scheduler_error_handler
 
 
 class Scheduler:
