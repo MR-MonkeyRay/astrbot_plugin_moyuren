@@ -4,6 +4,7 @@ from astrbot.api import logger
 import os
 import asyncio
 import uuid
+import traceback
 from typing import List, Optional, Union, Dict
 import json
 from ..utils.decorators import image_operation_handler
@@ -121,9 +122,9 @@ class ImageManager:
                 self.cached_image_path = None
                 self.cached_date = None
 
-        # 缓存无效，需要下载新图片
+        # 缓存无效，需要生成/下载新图片
         async with self._download_lock:
-            # 双重检查：可能在等待锁的过程中，其他协程已经下载完成
+            # 双重检查：可能在等待锁的过程中，其他协程已经完成
             if self.cached_image_path and self.cached_date == today:
                 if os.path.exists(self.cached_image_path):
                     logger.info(f"使用缓存的图片: {self.cached_image_path}")
@@ -137,6 +138,22 @@ class ImageManager:
                 except Exception as e:
                     logger.warning(f"删除旧缓存文件失败: {e}")
 
+            # 根据 render_mode 选择渲染方式
+            render_mode = self.config.get("render_mode", "api")
+
+            if render_mode == "local":
+                # 本地渲染
+                img_path = await self._render_local()
+                if img_path:
+                    logger.info("本地渲染成功")
+                    self.cached_image_path = img_path
+                    self.cached_date = today
+                    return img_path
+                else:
+                    logger.error("本地渲染失败，回退到 API 模式")
+                    # 继续执行 API 获取逻辑
+
+            # API 模式（或本地渲染失败后的回退）
             api_endpoints = list(self.api_endpoints)
 
             # 所有API都直接返回图片，逐个尝试直到成功
@@ -249,3 +266,29 @@ class ImageManager:
             logger.error(f"下载图片时出错: {str(e)}")
             logger.error(traceback.format_exc())
             raise
+
+    async def _render_local(self) -> Optional[str]:
+        """本地渲染摸鱼日历
+
+        Returns:
+            str: 图片文件路径，失败返回 None
+        """
+        try:
+            from core.rendering.data_provider import MoyuDataProvider
+            from core.rendering.wkhtml_renderer import WkhtmlMoyuRenderer
+
+            # 生成数据
+            provider = MoyuDataProvider()
+            data = provider.generate_moyu_data()
+
+            # 渲染图片（使用渲染器的固定配置：PNG 格式，3.0 倍缩放因子）
+            renderer = WkhtmlMoyuRenderer(self.temp_dir)
+            image_path = renderer.render(data)
+
+            return image_path
+
+        except Exception as e:
+            logger.error(f"本地渲染异常: {e}")
+            import traceback
+            logger.error(traceback.format_exc())
+            return None
