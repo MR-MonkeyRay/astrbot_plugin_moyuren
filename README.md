@@ -58,6 +58,21 @@ A：可以的，你现在可以在AstrBot控制台的配置界面中编辑模板
 
 ## 更新日志
 
+### v3.0.0 🎉 重大重构版本
+- 🏗️ **代码架构重构**：采用分层架构设计，提升代码可维护性
+  - `models/` - 数据模型层
+  - `core/` - 核心业务逻辑层（config, image, scheduler）
+  - `handlers/` - 命令处理层
+  - `utils/` - 工具模块层（paths, constants, decorators）
+- 🔧 **模块化改进**：
+  - 提取公共装饰器到 `utils/decorators.py`
+  - 统一路径管理到 `utils/paths.py`
+  - 集中常量定义到 `utils/constants.py`
+- 🚀 **配置迁移**：新增 `migrate_legacy_config()` 函数，自动迁移旧版配置
+- 📦 **导入优化**：使用相对导入，提升模块加载稳定性
+- 🧹 **代码清理**：移除导入时的副作用，所有初始化操作封装到函数中
+- 📝 **日志统一**：统一使用 `astrbot.api.logger`
+
 ### v2.4.0
 - 🔧 重构图片管理器，实现图片缓存机制，同一天复用缓存图片
 - 🔒 添加并发锁防止缓存击穿

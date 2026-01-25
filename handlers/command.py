@@ -4,32 +4,8 @@ import astrbot.api.message_components as Comp
 from datetime import datetime, timedelta
 import re
 import traceback
-from functools import wraps
 from typing import AsyncGenerator
-
-
-def command_error_handler(func):
-    """命令错误处理装饰器"""
-
-    @wraps(func)
-    async def wrapper(*args, **kwargs) -> AsyncGenerator[MessageEventResult, None]:
-        try:
-            async for result in func(*args, **kwargs):
-                yield result
-        except ValueError as e:
-            # 参数验证错误
-            event = args[1] if len(args) > 1 else None
-            if event and isinstance(event, AstrMessageEvent):
-                yield event.plain_result(f"参数错误: {str(e)}")
-        except Exception as e:
-            # 其他未预期的错误
-            logger.error(f"{func.__name__} 执行出错: {str(e)}")
-            logger.error(traceback.format_exc())
-            event = args[1] if len(args) > 1 else None
-            if event and isinstance(event, AstrMessageEvent):
-                yield event.plain_result("操作执行失败，请查看日志获取详细信息")
-
-    return wrapper
+from ..utils.decorators import command_error_handler
 
 
 class CommandHelper:
@@ -383,12 +359,14 @@ class CommandHelper:
     ) -> AsyncGenerator[MessageEventResult, None]:
         """显示插件帮助信息"""
         help_text = (
-            "📅 摸鱼人日历插件\n"
+            "📅 摸鱼人日历插件 v3.0.0\n"
             "【功能简介】\n"
             "每天定时发送摸鱼人日历图片，支持多群组独立配置。\n"
+            "v3.0.0 采用全新分层架构设计，提升稳定性和可维护性。\n"
             "【命令列表】\n"
             "/set_time HH:MM 或 HHMM - 设置定时发送时间(24小时制)\n"
             "- 示例: /set_time 09:30 或 /set_time 0930\n"
+            "- 别名: 设置摸鱼时间\n"
             "/clear_time - 清除当前群聊的定时设置\n"
             "- 别名: 清除摸鱼时间\n"
             "/list_time - 查看当前群聊的时间设置\n"
@@ -403,6 +381,8 @@ class CommandHelper:
             "1. 使用 /set_time 设置每日发送时间\n"
             "2. 设置后插件会在每天指定时间自动发送摸鱼日历\n"
             "3. 可随时使用 /execute_now 或别名手动触发发送\n"
-            "4. ※群聊中仅管理员/群主可修改设置※"
+            "4. ※群聊中仅管理员/群主可修改设置※\n"
+            "【新特性】\n"
+            "✨ 分层架构设计 | 🚀 自动配置迁移 | 📦 模块化管理"
         )
         yield event.make_result().message(help_text)
