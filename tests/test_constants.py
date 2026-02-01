@@ -23,7 +23,7 @@ class TestConstants:
     def test_plugin_version_exists_and_type(self):
         """测试 PLUGIN_VERSION 常量存在且为 str 类型"""
         assert isinstance(PLUGIN_VERSION, str)
-        assert PLUGIN_VERSION == "3.0.0"
+        assert PLUGIN_VERSION == "3.1.0"
 
     def test_plugin_author_exists_and_type(self):
         """测试 PLUGIN_AUTHOR 常量存在且为 str 类型"""
@@ -54,7 +54,7 @@ class TestConstants:
     def test_constant_values_correct(self):
         """测试常量值是否符合预期"""
         assert PLUGIN_NAME == "moyuren"
-        assert PLUGIN_VERSION == "3.0.0"
+        assert PLUGIN_VERSION == "3.1.0"
         assert PLUGIN_AUTHOR == "MonkeyRay"
         assert "摸鱼人日历" in PLUGIN_DESC
         assert "github.com" in PLUGIN_REPO.lower()

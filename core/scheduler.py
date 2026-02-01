@@ -6,6 +6,7 @@ import astrbot.api.message_components as Comp
 from astrbot.api.event import MessageChain
 from typing import List, Tuple, Optional
 from ..utils.decorators import scheduler_error_handler
+from ..utils.scheduler_utils import should_delay_for_same_minute, get_random_delay
 
 
 class Scheduler:
@@ -179,6 +180,12 @@ class Scheduler:
 
                 # 执行任务
                 await self._execute_task(target, next_time)
+
+                # 检查是否需要添加随机延迟（仅对同一分钟内的后续任务）
+                if should_delay_for_same_minute(self.task_queue, next_time):
+                    delay = get_random_delay()
+                    logger.info(f"同一分钟内有后续任务，延迟 {delay:.2f} 秒后继续")
+                    await asyncio.sleep(delay)
 
                 # 记录任务队列状态
                 queue_info = [(dt.strftime("%Y-%m-%d %H:%M"), tgt) for dt, tgt in self.task_queue]
