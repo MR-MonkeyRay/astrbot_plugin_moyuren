@@ -295,11 +295,16 @@ class CommandHelper:
                 # 使用一个简单的格式作为后备
                 text = f"摸鱼人日历\n当前时间：{current_time}"
 
-            # 创建简单的消息段列表传递给chain_result
-            message_segments = [Comp.Plain(text), Comp.Image.fromFileSystem(image_path)]
-
-            # 使用消息段列表
-            yield event.chain_result(message_segments)
+            # 根据配置决定是否发送提示语
+            if self.image_manager.enable_message_template:
+                # 发送图片 + 提示语
+                yield event.chain_result([
+                    Comp.Plain(text + "\n"),
+                    Comp.Image.fromFileSystem(image_path)
+                ])
+            else:
+                # 仅发送图片
+                yield event.chain_result([Comp.Image.fromFileSystem(image_path)])
 
         except Exception as e:
             logger.error(f"执行立即发送命令时出错: {str(e)}")

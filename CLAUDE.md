@@ -7,7 +7,7 @@
 ### 技术栈
 - **语言**：Python 3.11+
 - **框架**：AstrBot Plugin API
-- **依赖**：aiohttp, PyYAML, imgkit (可选)
+- **依赖**：aiohttp, PyYAML
 - **测试**：pytest, pytest-cov, pytest-asyncio
 
 ---
@@ -18,7 +18,6 @@
 |---------|------|---------|
 | `/` | 插件入口与注册 | `main.py`, `__init__.py` |
 | `core/` | 核心业务逻辑层 | `config.py`, `image.py`, `scheduler.py` |
-| `core/rendering/` | 本地渲染子模块 | `wkhtml_renderer.py`, `data_provider.py` |
 | `handlers/` | 命令处理层 | `command.py` |
 | `models/` | 数据模型层 | `config_schema.py`, `moyu.py`, `moyu_static.py` |
 | `utils/` | 工具模块层 | `paths.py`, `constants.py`, `decorators.py` |
@@ -36,12 +35,7 @@
 ### 安装依赖
 
 ```bash
-# 基础依赖
 pip install -r requirements.txt
-
-# 本地渲染模式（可选）
-pip install imgkit
-# 并安装 wkhtmltoimage: https://wkhtmltopdf.org/downloads.html
 ```
 
 ### 运行测试
@@ -89,19 +83,11 @@ CACHE_DIR = DATA_ROOT / "cache"
 ```
 tests/
 ├── conftest.py              # 测试夹具（temp_dir, mock_logger, mock_context）
-├── unit/                    # 单元测试
-│   ├── __init__.py
-│   ├── test_constants.py   # 常量测试
-│   ├── test_models.py      # 数据模型测试
-│   ├── test_paths.py       # 路径工具测试
-│   ├── test_holiday_fetcher.py  # 节假日获取器测试
-│   └── test_fallback_logic.py   # 降级逻辑测试
-├── integration/             # 集成测试
-│   ├── __init__.py
-│   └── test_wkhtml_render.py    # 渲染器集成测试
-└── manual/                  # 手动测试
+└── unit/                    # 单元测试
     ├── __init__.py
-    └── test_holiday_simple.py   # 节假日数据简单测试
+    ├── test_constants.py   # 常量测试
+    ├── test_models.py      # 数据模型测试
+    └── test_paths.py       # 路径工具测试
 ```
 
 ### 运行测试
@@ -112,12 +98,6 @@ PYTHONPATH=$(pwd)
 
 # 运行所有单元测试
 pytest tests/unit/ -v
-
-# 运行图片渲染测试
-python tests/integration/test_wkhtml_render.py
-
-# 运行节假日数据简单测试
-python tests/manual/test_holiday_simple.py
 
 # 运行所有测试（包括覆盖率）
 pytest tests/ -v --cov=. --cov-report=html
@@ -171,11 +151,6 @@ pytest tests/ -v --cov=. --cov-report=html
 1. 在 `_conf_schema.json` 的 `api_endpoints` 数组中添加
 2. `core/image.py` 的 `_download_from_api` 会自动故障转移
 
-#### 扩展本地渲染
-1. 修改 `core/rendering/data_provider.py` 生成数据
-2. 更新 `core/rendering/moyu_template.html` 模板
-3. 调整 `core/rendering/wkhtml_renderer.py` 渲染参数
-
 ### 关键文件速查
 
 | 需求 | 文件路径 |
@@ -185,7 +160,6 @@ pytest tests/ -v --cov=. --cov-report=html
 | 配置管理 | `core/config.py` |
 | 图片获取与缓存 | `core/image.py` |
 | 定时任务调度 | `core/scheduler.py` |
-| 本地渲染 | `core/rendering/wkhtml_renderer.py` |
 | 数据模型 | `models/moyu.py`, `models/config_schema.py` |
 | 路径管理 | `utils/paths.py` |
 | 错误处理装饰器 | `utils/decorators.py` |

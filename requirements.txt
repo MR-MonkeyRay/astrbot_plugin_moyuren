@@ -3,13 +3,7 @@
 # AstrBot 框架（由 AstrBot 提供，无需单独安装）
 # astrbot>=3.0.0
 
-# wkhtmltoimage（HTML 本地渲染模式）
-imgkit>=1.2.0
-
-# HTTP 客户端（用于节假日数据获取）
-requests>=2.28.0
-
-# 异步 HTTP 客户端（其他模块使用）
+# 异步 HTTP 客户端（API 请求）
 aiohttp>=3.8.0
 
 # YAML 配置文件解析

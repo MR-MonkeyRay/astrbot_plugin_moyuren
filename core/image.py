@@ -28,10 +28,11 @@ class ImageManager:
         self.api_endpoints = config.get(
             "api_endpoints",
             [
-                "https://api.52vmy.cn/api/wl/moyu",
+                "https://api.monkeyray.net/api/v1/moyuren",
             ],
         )
         self.request_timeout = config.get("request_timeout", 5)
+        self.enable_message_template = config.get("enable_message_template", False)
         self.current_template_index = 0
 
         # 缓存相关属性
@@ -138,42 +139,24 @@ class ImageManager:
                 except Exception as e:
                     logger.warning(f"删除旧缓存文件失败: {e}")
 
-            # 根据 render_mode 选择渲染方式
-            render_mode = self.config.get("render_mode", "api")
-
-            if render_mode == "local":
-                # 本地渲染
-                img_path = await self._render_local()
-                if img_path:
-                    logger.info("本地渲染成功")
-                    self.cached_image_path = img_path
-                    self.cached_date = today
-                    return img_path
-                else:
-                    logger.error("本地渲染失败，回退到 API 模式")
-                    # 继续执行 API 获取逻辑
-
-            # API 模式（或本地渲染失败后的回退）
+            # API 模式获取图片
             api_endpoints = list(self.api_endpoints)
 
-            # 所有API都直接返回图片，逐个尝试直到成功
+            # 逐个尝试API直到成功
             for idx, api_url in enumerate(api_endpoints):
                 try:
                     session = self._get_session()
-                    # 直接下载图片
-                    try:
-                        img_path = await self._download_image(session, api_url)
-                        if img_path:
-                            logger.info(f"成功获取图片，API索引: {idx+1}")
-                            # 更新缓存
-                            self.cached_image_path = img_path
-                            self.cached_date = today
-                            return img_path
-                        else:
-                            logger.error(f"API {api_url} 无法获取有效图片")
-                            continue
-                    except Exception as e:
-                        logger.error(f"下载 {api_url} 失败: {str(e)}")
+                    # 发起一次请求并处理（避免双重请求）
+                    img_path = await self._fetch_and_process_api(session, api_url)
+
+                    if img_path:
+                        logger.info(f"成功获取图片，API索引: {idx+1}")
+                        # 更新缓存
+                        self.cached_image_path = img_path
+                        self.cached_date = today
+                        return img_path
+                    else:
+                        logger.error(f"API {api_url} 无法获取有效图片")
                         continue
 
                 except asyncio.TimeoutError:
@@ -204,6 +187,101 @@ class ImageManager:
                     logger.error(f"复制本地备用图片失败: {str(e)}")
 
             return None
+
+    async def _fetch_and_process_api(
+        self, session: aiohttp.ClientSession, url: str
+    ) -> Optional[str]:
+        """发起一次请求，自动判断响应类型并处理
+
+        - JSON API：解析 image 字段，再下载图片
+        - 图片 API：直接保存响应内容
+        """
+        headers = {
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36",
+            "Accept": "*/*",
+        }
+
+        async with session.get(url, headers=headers, timeout=aiohttp.ClientTimeout(total=self.request_timeout)) as response:
+            if response.status != 200:
+                logger.error(f"API 请求失败，状态码: {response.status}")
+                return None
+
+            content_type = response.headers.get("content-type", "")
+            # 先读取全部内容到内存（避免流只能读取一次的问题）
+            content = await response.read()
+
+            if not content or len(content) < 100:
+                logger.error(f"API 响应内容为空或太小")
+                return None
+
+            # 如果返回的是图片，直接保存
+            if "image" in content_type:
+                return await self._save_image_content(content, content_type)
+
+            # 尝试解析为 JSON
+            try:
+                data = json.loads(content.decode("utf-8"))
+                if isinstance(data, dict) and data.get("image"):
+                    image_url = data["image"]
+                    if isinstance(image_url, str):
+                        logger.info(f"JSON API 返回图片 URL: {image_url}")
+                        return await self._download_image(session, image_url)
+            except (json.JSONDecodeError, UnicodeDecodeError) as e:
+                logger.debug(f"JSON 解析失败: {str(e)}")
+
+            # 非图片也非有效 JSON，尝试将内容当作图片保存（某些 API 可能不设置正确的 content-type）
+            if len(content) > 1000:
+                return await self._save_image_content(content, content_type)
+
+            logger.error(f"API {url} 返回了无法识别的内容类型: {content_type}")
+            return None
+
+    async def _save_image_content(
+        self, content: bytes, content_type: str = ""
+    ) -> Optional[str]:
+        """将图片内容保存到临时文件"""
+        if not content or len(content) < 1000:
+            logger.error(f"图片内容太小，可能无效: {len(content) if content else 0} 字节")
+            return None
+
+        # 图片魔数校验
+        image_format = self._detect_image_format(content)
+        if not image_format:
+            # 如果 content-type 明确是图片，仍然尝试保存
+            if "image" in content_type:
+                image_format = "jpg"  # 默认格式
+            else:
+                logger.error("内容不是有效的图片格式（魔数校验失败）")
+                return None
+
+        image_path = os.path.join(
+            self.temp_dir, f"moyu_{uuid.uuid4().hex[:8]}.{image_format}"
+        )
+
+        with open(image_path, "wb") as f:
+            f.write(content)
+
+        return image_path
+
+    def _detect_image_format(self, content: bytes) -> Optional[str]:
+        """通过魔数检测图片格式"""
+        if len(content) < 8:
+            return None
+
+        # JPEG: FF D8 FF
+        if content[:3] == b'\xff\xd8\xff':
+            return "jpg"
+        # PNG: 89 50 4E 47 0D 0A 1A 0A
+        if content[:8] == b'\x89PNG\r\n\x1a\n':
+            return "png"
+        # GIF: 47 49 46 38
+        if content[:4] == b'GIF8':
+            return "gif"
+        # WebP: 52 49 46 46 ... 57 45 42 50
+        if content[:4] == b'RIFF' and len(content) > 11 and content[8:12] == b'WEBP':
+            return "webp"
+
+        return None
 
     async def _download_image(
         self, session: aiohttp.ClientSession, url: str
@@ -266,29 +344,3 @@ class ImageManager:
             logger.error(f"下载图片时出错: {str(e)}")
             logger.error(traceback.format_exc())
             raise
-
-    async def _render_local(self) -> Optional[str]:
-        """本地渲染摸鱼日历
-
-        Returns:
-            str: 图片文件路径，失败返回 None
-        """
-        try:
-            from core.rendering.data_provider import MoyuDataProvider
-            from core.rendering.wkhtml_renderer import WkhtmlMoyuRenderer
-
-            # 生成数据
-            provider = MoyuDataProvider()
-            data = provider.generate_moyu_data()
-
-            # 渲染图片（使用渲染器的固定配置：PNG 格式，3.0 倍缩放因子）
-            renderer = WkhtmlMoyuRenderer(self.temp_dir)
-            image_path = renderer.render(data)
-
-            return image_path
-
-        except Exception as e:
-            logger.error(f"本地渲染异常: {e}")
-            import traceback
-            logger.error(traceback.format_exc())
-            return None

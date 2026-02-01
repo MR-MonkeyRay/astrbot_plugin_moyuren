@@ -94,9 +94,16 @@ class Scheduler:
                 logger.error(f"格式化模板时出错: {str(e)}")
                 text = f"摸鱼人日历\n当前时间：{current_time}"
 
-            # 构建消息
-            message_segments = [Comp.Plain(text), Comp.Image.fromFileSystem(image_path)]
-            message_chain = MessageChain(message_segments)
+            # 根据配置决定是否发送提示语
+            if self.image_manager.enable_message_template:
+                # 发送图片 + 提示语
+                message_chain = MessageChain([
+                    Comp.Plain(text + "\n"),
+                    Comp.Image.fromFileSystem(image_path)
+                ])
+            else:
+                # 仅发送图片
+                message_chain = MessageChain([Comp.Image.fromFileSystem(image_path)])
 
             # 发送消息
             await self.context.send_message(target, message_chain)

@@ -1,4 +1,10 @@
 {
+  "enable_message_template": {
+    "description": "是否发送提示语",
+    "type": "bool",
+    "hint": "开启后发送图片时会附带随机提示语，关闭则仅发送图片",
+    "default": false
+  },
   "api_endpoints": {
     "description": "摸鱼人日历API端点列表，按优先顺序排列",
     "type": "list",
@@ -7,8 +13,7 @@
       "type": "string"
     },
     "default": [
-      "https://api.52vmy.cn/api/wl/moyu",
-      "https://dayu.qqsuu.cn/moyuribao/apis.php"
+      "https://api.monkeyray.net/api/v1/moyuren"
     ]
   },
   "templates": {
@@ -65,12 +70,6 @@
       "name": "默认样式",
       "format": "📅 摸鱼提醒 记得喝水休息哦\n⏰️ 当前时间 {time}\n📢 三点多啦 做个不停做个屁啊\n📢 先喝茶啦 三点多了 先喝茶吧\n📢 做多也没用 老板不会心疼你"
     }
-  },
-  "render_mode": {
-    "description": "日历生成模式（api/local）",
-    "type": "string",
-    "hint": "api=从API获取图片; local=本地wkhtmltoimage渲染",
-    "default": "api"
   },
   "request_timeout": {
     "description": "API请求超时时间（秒）",

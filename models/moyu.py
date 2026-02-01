@@ -1,8 +1,6 @@
 """摸鱼日历数据模型"""
 
 from dataclasses import dataclass
-from typing import List
-from datetime import datetime
 
 
 @dataclass
@@ -45,35 +43,4 @@ class HoroscopeItem:
     fortune: str  # 运势文案
 
 
-@dataclass
-class LocalRenderData:
-    """本地渲染数据"""
-    # 日期信息
-    date: datetime
-    year_month: str  # 如"2026年1月"
-    day: int  # 日期数字
-    weekday: str  # 星期（如"星期六"）
-    lunar_date: str  # 农历日期（如"腊月廿六"）
-
-    # 摸鱼信息
-    moyu_index: int  # 摸鱼指数 (0-100)
-    moyu_level: str  # 摸鱼等级（如"鱼鲨"、"老油条"）
-    moyu_quote: str  # 摸鱼语录
-
-    # 星座运势
-    horoscope: HoroscopeItem
-
-    # 倒计时
-    weekend_days: int  # 距离周末天数（0表示今天是周末）
-    salary_countdowns: List[CountdownItem]  # 发薪日倒计时
-    festival_countdowns: List[CountdownItem]  # 节日倒计时
-
-    # 其他
-    greeting: str  # 问候语（如"早上好"）
-    greeting_emoji: str  # 问候emoji
-
-    # 摸鱼时间轴（可选字段，放在最后）
-    timeline: List[str] = None  # 摸鱼时间轴（如["09:00 伪装上班", "10:30 假装思考"]）
-
-
-__all__ = ["CountdownItem", "HoroscopeItem", "LocalRenderData"]
+__all__ = ["CountdownItem", "HoroscopeItem"]

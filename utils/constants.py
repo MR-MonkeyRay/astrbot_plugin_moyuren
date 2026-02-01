@@ -9,7 +9,7 @@ PLUGIN_REPO = "https://github.com/MR-MonkeyRay/astrbot_plugin_moyuren"
 
 # 默认配置
 DEFAULT_API_ENDPOINTS = [
-    "https://api.52vmy.cn/api/wl/moyu",
+    "https://api.monkeyray.net/api/v1/moyuren",
 ]
 
 DEFAULT_TEMPLATE = {

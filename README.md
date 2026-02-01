@@ -4,13 +4,7 @@
 
 ## 效果展示
 
-### API 模式
-![摸鱼人日历 - API模式](assets/moyu-api.png)
-
-### 本地渲染模式（新增）
-![摸鱼人日历 - 本地渲染](assets/wkhtml-render-example.png)
-
-*本地渲染模式使用 wkhtmltoimage 生成*
+![摸鱼人日历](assets/moyu-api.png)
 
 ## 安装
 
@@ -35,16 +29,11 @@ pip install -r requirements.txt
 
 - **aiohttp** - 异步 HTTP 客户端，用于获取摸鱼日历图片
 - **PyYAML** - YAML 配置文件解析
-- **imgkit** - HTML 转图片工具（仅本地渲染模式需要）
 
 这些依赖通常会随 AstrBot 一起安装，如果遇到导入错误，请手动安装：
 
 ```bash
 pip install aiohttp PyYAML
-
-# 如果使用本地渲染模式，还需要安装：
-pip install imgkit
-# 并安装 wkhtmltoimage: https://wkhtmltopdf.org/downloads.html
 ```
 
 ## 功能特点
@@ -58,7 +47,6 @@ pip install imgkit
 - 🌐 多API源支持，自动故障转移（指三个，其中一个还偶尔抽风）
 - 🕒 显示下一次发送的等待时间
 - 📝 支持通过配置文件自定义API端点和消息模板
-- 🎨 **新增**：支持本地渲染模式，使用 wkhtmltoimage 生成超高清摸鱼日历图片
 
 ## 使用说明
 
@@ -82,9 +70,6 @@ pip install imgkit
 
 插件现在支持通过`_conf_schema.json`配置文件自定义以下设置：
 
-- **日历生成模式**：选择 API 模式或本地渲染模式
-  - `api`：从 API 获取图片（默认）
-  - `local`：使用 wkhtmltoimage 在本地生成超高清图片（3x 清晰度）
 - API端点列表：按优先顺序排列，自动故障转移
 - 消息模板：支持多种排版样式，每次按顺序选择
 - 默认模板：当没有其他模板可用时使用
@@ -185,16 +170,6 @@ A：可以的，你现在可以在AstrBot控制台的配置界面中编辑模板
 pytest tests/unit/ -v
 ```
 
-**运行图片渲染测试**（需要安装 wkhtmltoimage）：
-```bash
-python tests/integration/test_wkhtml_render.py
-```
-
-**运行节假日数据简单测试**：
-```bash
-python tests/manual/test_holiday_simple.py
-```
-
 **查看测试覆盖率**：
 ```bash
 pytest tests/ -v --cov=. --cov-report=html
@@ -211,16 +186,8 @@ tests/
 ├── test_constants.py        # 常量测试
 ├── test_models.py           # 数据模型测试
 ├── test_paths.py            # 路径工具测试
-├── unit/                    # 单元测试
-│   ├── __init__.py
-│   ├── test_holiday_fetcher.py  # 节假日获取器测试
-│   └── test_fallback_logic.py   # 降级逻辑测试
-├── integration/             # 集成测试
-│   ├── __init__.py
-│   └── test_wkhtml_render.py    # 渲染器集成测试
-└── manual/                  # 手动测试
-    ├── __init__.py
-    └── test_holiday_simple.py   # 节假日数据简单测试
+└── unit/                    # 单元测试
+    └── __init__.py
 ```
 
 ## 支持与反馈
