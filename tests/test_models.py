@@ -42,18 +42,15 @@ class TestPluginConfig:
         assert config.group_settings == {}
         assert config.api_endpoints == []
         assert config.templates == []
-        assert config.default_template == {}
 
     def test_plugin_config_set_fields(self):
         """测试设置各个字段"""
         config = PluginConfig(
             api_endpoints=["https://api.example.com"],
-            templates=[{"name": "test", "format": "test"}],
-            default_template={"name": "default", "format": "default"}
+            templates=[{"format": "test {time}"}],
         )
         assert config.api_endpoints == ["https://api.example.com"]
-        assert config.templates == [{"name": "test", "format": "test"}]
-        assert config.default_template == {"name": "default", "format": "default"}
+        assert config.templates == [{"format": "test {time}"}]
 
     def test_plugin_config_group_settings_operations(self):
         """测试 group_settings 字典操作"""
@@ -77,15 +74,13 @@ class TestPluginConfig:
         config = PluginConfig(
             group_settings={"123": GroupSettings(custom_time="09:00")},
             api_endpoints=["https://api.example.com"],
-            templates=[{"name": "test"}],
-            default_template={"name": "default"}
+            templates=[{"format": "test {time}"}],
         )
         data = asdict(config)
 
         assert data["group_settings"]["123"]["custom_time"] == "09:00"
         assert data["api_endpoints"] == ["https://api.example.com"]
-        assert data["templates"] == [{"name": "test"}]
-        assert data["default_template"] == {"name": "default"}
+        assert data["templates"] == [{"format": "test {time}"}]
 
     def test_plugin_config_multiple_groups(self):
         """测试多个群组设置"""

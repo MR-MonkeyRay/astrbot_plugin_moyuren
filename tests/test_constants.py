@@ -8,7 +8,6 @@ from utils.constants import (
     PLUGIN_DESC,
     PLUGIN_REPO,
     DEFAULT_API_ENDPOINTS,
-    DEFAULT_TEMPLATE,
 )
 
 
@@ -52,17 +51,6 @@ class TestConstants:
             assert isinstance(endpoint, str)
             assert endpoint.startswith("http")
 
-    def test_default_template_required_keys(self):
-        """测试 DEFAULT_TEMPLATE 包含必要的键"""
-        assert isinstance(DEFAULT_TEMPLATE, dict)
-        assert "name" in DEFAULT_TEMPLATE
-        assert "format" in DEFAULT_TEMPLATE
-
-    def test_default_template_type(self):
-        """测试 DEFAULT_TEMPLATE 类型正确"""
-        assert isinstance(DEFAULT_TEMPLATE["name"], str)
-        assert isinstance(DEFAULT_TEMPLATE["format"], str)
-
     def test_constant_values_correct(self):
         """测试常量值是否符合预期"""
         assert PLUGIN_NAME == "moyuren"
@@ -70,7 +58,3 @@ class TestConstants:
         assert PLUGIN_AUTHOR == "MonkeyRay"
         assert "摸鱼人日历" in PLUGIN_DESC
         assert "github.com" in PLUGIN_REPO.lower()
-
-    def test_default_template_format_contains_placeholder(self):
-        """测试 DEFAULT_TEMPLATE 的 format 包含占位符"""
-        assert "{time}" in DEFAULT_TEMPLATE["format"]

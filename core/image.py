@@ -21,10 +21,6 @@ class ImageManager:
         self.temp_dir = temp_dir
         self.config = config
         self.templates = config.get("templates", [])
-        self.default_template = config.get(
-            "default_template",
-            {"name": "默认样式", "format": "摸鱼人日历\n当前时间：{time}"},
-        )
         self.api_endpoints = config.get(
             "api_endpoints",
             [
@@ -44,10 +40,6 @@ class ImageManager:
 
         # aiohttp session 复用
         self._session: Optional[aiohttp.ClientSession] = None
-
-        # 确保模板列表不为空
-        if not self.templates:
-            self.templates = [self.default_template]
 
         # 预处理并缓存有效模板
         self._valid_templates = self._preprocess_templates()
@@ -76,8 +68,8 @@ class ImageManager:
                 logger.warning(f"无效的模板格式: {tmpl}")
 
         if not valid_templates:
-            logger.warning("没有有效的模板，使用默认模板")
-            return [self.default_template]
+            logger.warning("没有有效的模板，将仅发送图片")
+            return []
 
         return valid_templates
 
@@ -94,11 +86,15 @@ class ImageManager:
             await self._session.close()
             self._session = None
 
-    def _get_next_template(self) -> Dict:
-        """按顺序获取下一个消息模板"""
+    def _get_next_template(self) -> Optional[Dict]:
+        """按顺序获取下一个消息模板
+
+        Returns:
+            模板字典，如果没有有效模板则返回 None
+        """
         if not self._valid_templates:
-            logger.warning("模板列表为空，使用默认模板")
-            return self.default_template
+            logger.debug("模板列表为空，将仅发送图片")
+            return None
 
         # 按顺序获取模板
         template = self._valid_templates[self.current_template_index]

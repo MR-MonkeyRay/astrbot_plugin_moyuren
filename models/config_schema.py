@@ -16,7 +16,6 @@ class PluginConfig:
     group_settings: Dict[str, GroupSettings] = field(default_factory=dict)
     api_endpoints: List[str] = field(default_factory=list)
     templates: List[Dict[str, Any]] = field(default_factory=list)
-    default_template: Dict[str, str] = field(default_factory=dict)
 
 
 __all__ = ["GroupSettings", "PluginConfig"]

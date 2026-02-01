@@ -75,35 +75,24 @@ class Scheduler:
                 logger.error("获取摸鱼图片失败")
                 return False
 
-            # 获取当前时间
-            current_time = datetime.now().strftime("%Y-%m-%d %H:%M")
-
-            # 获取模板
-            template = self.image_manager._get_next_template()
-
-            # 确保模板是字典类型并包含必要的键
-            if not isinstance(template, dict) or "format" not in template:
-                logger.error("模板格式不正确")
-                template = self.image_manager.default_template
-
-            # 格式化文本
-            try:
-                text = template["format"].format(time=current_time)
-                logger.info(f"使用模板: {template.get('name', '未命名模板')}")
-            except Exception as e:
-                logger.error(f"格式化模板时出错: {str(e)}")
-                text = f"摸鱼人日历\n当前时间：{current_time}"
+            # 构建消息
+            message_chain = MessageChain([Comp.Image.fromFileSystem(image_path)])
 
             # 根据配置决定是否发送提示语
             if self.image_manager.enable_message_template:
-                # 发送图片 + 提示语
-                message_chain = MessageChain([
-                    Comp.Plain(text + "\n"),
-                    Comp.Image.fromFileSystem(image_path)
-                ])
-            else:
-                # 仅发送图片
-                message_chain = MessageChain([Comp.Image.fromFileSystem(image_path)])
+                current_time = datetime.now().strftime("%Y-%m-%d %H:%M")
+                template = self.image_manager._get_next_template()
+
+                if template and isinstance(template, dict) and "format" in template:
+                    try:
+                        text = template["format"].format(time=current_time)
+                        logger.info(f"使用模板: {template.get('name', '未命名模板')}")
+                        message_chain = MessageChain([
+                            Comp.Plain(text + "\n"),
+                            Comp.Image.fromFileSystem(image_path)
+                        ])
+                    except Exception as e:
+                        logger.error(f"格式化模板时出错: {str(e)}")
 
             # 发送消息
             await self.context.send_message(target, message_chain)
