@@ -4,32 +4,8 @@ import astrbot.api.message_components as Comp
 from datetime import datetime, timedelta
 import re
 import traceback
-from functools import wraps
 from typing import AsyncGenerator
-
-
-def command_error_handler(func):
-    """命令错误处理装饰器"""
-
-    @wraps(func)
-    async def wrapper(*args, **kwargs) -> AsyncGenerator[MessageEventResult, None]:
-        try:
-            async for result in func(*args, **kwargs):
-                yield result
-        except ValueError as e:
-            # 参数验证错误
-            event = args[1] if len(args) > 1 else None
-            if event and isinstance(event, AstrMessageEvent):
-                yield event.plain_result(f"参数错误: {str(e)}")
-        except Exception as e:
-            # 其他未预期的错误
-            logger.error(f"{func.__name__} 执行出错: {str(e)}")
-            logger.error(traceback.format_exc())
-            event = args[1] if len(args) > 1 else None
-            if event and isinstance(event, AstrMessageEvent):
-                yield event.plain_result("操作执行失败，请查看日志获取详细信息")
-
-    return wrapper
+from ..utils.decorators import command_error_handler
 
 
 class CommandHelper:
@@ -301,29 +277,25 @@ class CommandHelper:
                 yield event.make_result().message("获取摸鱼图片失败，请稍后再试")
                 return
 
-            current_time = datetime.now().strftime("%Y-%m-%d %H:%M")
+            # 根据配置决定是否发送提示语
+            if self.image_manager.enable_message_template:
+                current_time = datetime.now().strftime("%Y-%m-%d %H:%M")
+                template = self.image_manager._get_next_template()
 
-            # 获取消息内容
-            template = self.image_manager._get_next_template()
+                if template and isinstance(template, dict) and "format" in template:
+                    try:
+                        text = template["format"].format(time=current_time)
+                        logger.info(f"使用模板: {template.get('name', '未命名模板')}")
+                        yield event.chain_result([
+                            Comp.Plain(text + "\n"),
+                            Comp.Image.fromFileSystem(image_path)
+                        ])
+                        return
+                    except Exception as e:
+                        logger.error(f"格式化模板时出错: {str(e)}")
 
-            # 确保模板是字典类型并包含必要的键
-            if not isinstance(template, dict) or "format" not in template:
-                logger.error(f"模板格式不正确")
-                template = self.image_manager.default_template
-
-            try:
-                text = template["format"].format(time=current_time)
-                logger.info(f"使用模板: {template.get('name', '未命名模板')}")
-            except Exception as e:
-                logger.error(f"格式化模板时出错: {str(e)}")
-                # 使用一个简单的格式作为后备
-                text = f"摸鱼人日历\n当前时间：{current_time}"
-
-            # 创建简单的消息段列表传递给chain_result
-            message_segments = [Comp.Plain(text), Comp.Image.fromFileSystem(image_path)]
-
-            # 使用消息段列表
-            yield event.chain_result(message_segments)
+            # 仅发送图片
+            yield event.chain_result([Comp.Image.fromFileSystem(image_path)])
 
         except Exception as e:
             logger.error(f"执行立即发送命令时出错: {str(e)}")
@@ -389,6 +361,7 @@ class CommandHelper:
             "【命令列表】\n"
             "/set_time HH:MM 或 HHMM - 设置定时发送时间(24小时制)\n"
             "- 示例: /set_time 09:30 或 /set_time 0930\n"
+            "- 别名: 设置摸鱼时间\n"
             "/clear_time - 清除当前群聊的定时设置\n"
             "- 别名: 清除摸鱼时间\n"
             "/list_time - 查看当前群聊的时间设置\n"

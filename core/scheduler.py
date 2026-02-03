@@ -2,30 +2,11 @@ import asyncio
 from datetime import datetime, timedelta
 import heapq
 from astrbot.api import logger
-import traceback
 import astrbot.api.message_components as Comp
 from astrbot.api.event import MessageChain
 from typing import List, Tuple, Optional
-from functools import wraps
-
-
-def scheduler_error_handler(func):
-    """调度器错误处理装饰器"""
-
-    @wraps(func)
-    async def wrapper(*args, **kwargs):
-        try:
-            return await func(*args, **kwargs)
-        except asyncio.CancelledError:
-            raise
-        except Exception as e:
-            logger.error(f"{func.__name__} 执行出错: {str(e)}")
-            logger.error(traceback.format_exc())
-            # 出错后等待一段时间再继续
-            await asyncio.sleep(60)
-            return None
-
-    return wrapper
+from ..utils.decorators import scheduler_error_handler
+from ..utils.scheduler_utils import should_delay_for_same_minute, get_random_delay
 
 
 class Scheduler:
@@ -95,28 +76,24 @@ class Scheduler:
                 logger.error("获取摸鱼图片失败")
                 return False
 
-            # 获取当前时间
-            current_time = datetime.now().strftime("%Y-%m-%d %H:%M")
-
-            # 获取模板
-            template = self.image_manager._get_next_template()
-
-            # 确保模板是字典类型并包含必要的键
-            if not isinstance(template, dict) or "format" not in template:
-                logger.error("模板格式不正确")
-                template = self.image_manager.default_template
-
-            # 格式化文本
-            try:
-                text = template["format"].format(time=current_time)
-                logger.info(f"使用模板: {template.get('name', '未命名模板')}")
-            except Exception as e:
-                logger.error(f"格式化模板时出错: {str(e)}")
-                text = f"摸鱼人日历\n当前时间：{current_time}"
-
             # 构建消息
-            message_segments = [Comp.Plain(text), Comp.Image.fromFileSystem(image_path)]
-            message_chain = MessageChain(message_segments)
+            message_chain = MessageChain([Comp.Image.fromFileSystem(image_path)])
+
+            # 根据配置决定是否发送提示语
+            if self.image_manager.enable_message_template:
+                current_time = datetime.now().strftime("%Y-%m-%d %H:%M")
+                template = self.image_manager._get_next_template()
+
+                if template and isinstance(template, dict) and "format" in template:
+                    try:
+                        text = template["format"].format(time=current_time)
+                        logger.info(f"使用模板: {template.get('name', '未命名模板')}")
+                        message_chain = MessageChain([
+                            Comp.Plain(text + "\n"),
+                            Comp.Image.fromFileSystem(image_path)
+                        ])
+                    except Exception as e:
+                        logger.error(f"格式化模板时出错: {str(e)}")
 
             # 发送消息
             await self.context.send_message(target, message_chain)
@@ -203,6 +180,12 @@ class Scheduler:
 
                 # 执行任务
                 await self._execute_task(target, next_time)
+
+                # 检查是否需要添加随机延迟（仅对同一分钟内的后续任务）
+                if should_delay_for_same_minute(self.task_queue, next_time):
+                    delay = get_random_delay()
+                    logger.info(f"同一分钟内有后续任务，延迟 {delay:.2f} 秒后继续")
+                    await asyncio.sleep(delay)
 
                 # 记录任务队列状态
                 queue_info = [(dt.strftime("%Y-%m-%d %H:%M"), tgt) for dt, tgt in self.task_queue]

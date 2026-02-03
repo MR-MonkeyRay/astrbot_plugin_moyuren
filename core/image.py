@@ -1,32 +1,13 @@
 import aiohttp
 from datetime import datetime
 from astrbot.api import logger
-import traceback
 import os
 import asyncio
 import uuid
+import traceback
 from typing import List, Optional, Union, Dict
-from functools import wraps
 import json
-
-
-def image_operation_handler(func):
-    """图片操作错误处理装饰器"""
-
-    @wraps(func)
-    async def wrapper(*args, **kwargs):
-        try:
-            return await func(*args, **kwargs)
-        except aiohttp.ClientError as e:
-            logger.error(f"网络请求错误: {str(e)}")
-        except asyncio.TimeoutError:
-            logger.error("请求超时")
-        except Exception as e:
-            logger.error(f"{func.__name__} 执行出错: {str(e)}")
-            logger.error(traceback.format_exc())
-        return None
-
-    return wrapper
+from ..utils.decorators import image_operation_handler
 
 
 class ImageManager:
@@ -40,17 +21,14 @@ class ImageManager:
         self.temp_dir = temp_dir
         self.config = config
         self.templates = config.get("templates", [])
-        self.default_template = config.get(
-            "default_template",
-            {"name": "默认样式", "format": "摸鱼人日历\n当前时间：{time}"},
-        )
         self.api_endpoints = config.get(
             "api_endpoints",
             [
-                "https://api.52vmy.cn/api/wl/moyu",
+                "https://api.monkeyray.net/api/v1/moyuren",
             ],
         )
         self.request_timeout = config.get("request_timeout", 5)
+        self.enable_message_template = config.get("enable_message_template", False)
         self.current_template_index = 0
 
         # 缓存相关属性
@@ -62,10 +40,6 @@ class ImageManager:
 
         # aiohttp session 复用
         self._session: Optional[aiohttp.ClientSession] = None
-
-        # 确保模板列表不为空
-        if not self.templates:
-            self.templates = [self.default_template]
 
         # 预处理并缓存有效模板
         self._valid_templates = self._preprocess_templates()
@@ -94,8 +68,8 @@ class ImageManager:
                 logger.warning(f"无效的模板格式: {tmpl}")
 
         if not valid_templates:
-            logger.warning("没有有效的模板，使用默认模板")
-            return [self.default_template]
+            logger.warning("没有有效的模板，将仅发送图片")
+            return []
 
         return valid_templates
 
@@ -112,11 +86,15 @@ class ImageManager:
             await self._session.close()
             self._session = None
 
-    def _get_next_template(self) -> Dict:
-        """按顺序获取下一个消息模板"""
+    def _get_next_template(self) -> Optional[Dict]:
+        """按顺序获取下一个消息模板
+
+        Returns:
+            模板字典，如果没有有效模板则返回 None
+        """
         if not self._valid_templates:
-            logger.warning("模板列表为空，使用默认模板")
-            return self.default_template
+            logger.debug("模板列表为空，将仅发送图片")
+            return None
 
         # 按顺序获取模板
         template = self._valid_templates[self.current_template_index]
@@ -141,9 +119,9 @@ class ImageManager:
                 self.cached_image_path = None
                 self.cached_date = None
 
-        # 缓存无效，需要下载新图片
+        # 缓存无效，需要生成/下载新图片
         async with self._download_lock:
-            # 双重检查：可能在等待锁的过程中，其他协程已经下载完成
+            # 双重检查：可能在等待锁的过程中，其他协程已经完成
             if self.cached_image_path and self.cached_date == today:
                 if os.path.exists(self.cached_image_path):
                     logger.info(f"使用缓存的图片: {self.cached_image_path}")
@@ -157,26 +135,24 @@ class ImageManager:
                 except Exception as e:
                     logger.warning(f"删除旧缓存文件失败: {e}")
 
+            # API 模式获取图片
             api_endpoints = list(self.api_endpoints)
 
-            # 所有API都直接返回图片，逐个尝试直到成功
+            # 逐个尝试API直到成功
             for idx, api_url in enumerate(api_endpoints):
                 try:
                     session = self._get_session()
-                    # 直接下载图片
-                    try:
-                        img_path = await self._download_image(session, api_url)
-                        if img_path:
-                            logger.info(f"成功获取图片，API索引: {idx+1}")
-                            # 更新缓存
-                            self.cached_image_path = img_path
-                            self.cached_date = today
-                            return img_path
-                        else:
-                            logger.error(f"API {api_url} 无法获取有效图片")
-                            continue
-                    except Exception as e:
-                        logger.error(f"下载 {api_url} 失败: {str(e)}")
+                    # 发起一次请求并处理（避免双重请求）
+                    img_path = await self._fetch_and_process_api(session, api_url)
+
+                    if img_path:
+                        logger.info(f"成功获取图片，API索引: {idx+1}")
+                        # 更新缓存
+                        self.cached_image_path = img_path
+                        self.cached_date = today
+                        return img_path
+                    else:
+                        logger.error(f"API {api_url} 无法获取有效图片")
                         continue
 
                 except asyncio.TimeoutError:
@@ -207,6 +183,111 @@ class ImageManager:
                     logger.error(f"复制本地备用图片失败: {str(e)}")
 
             return None
+
+    async def _fetch_and_process_api(
+        self, session: aiohttp.ClientSession, url: str
+    ) -> Optional[str]:
+        """请求新 API 并处理 JSON 响应
+
+        新 API 返回 JSON 格式：{"date": "...", "image": "https://..."}
+        """
+        headers = {
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36",
+            "Accept": "application/json",
+        }
+
+        async with session.get(url, headers=headers, timeout=aiohttp.ClientTimeout(total=self.request_timeout)) as response:
+            if response.status != 200:
+                logger.error(f"API 请求失败，状态码: {response.status}")
+                return None
+
+            # 读取响应内容
+            content = await response.read()
+
+            if not content:
+                logger.error(f"API 响应内容为空")
+                return None
+
+            # 解析 JSON 响应
+            try:
+                data = json.loads(content.decode("utf-8"))
+
+                # 验证响应格式
+                if not isinstance(data, dict):
+                    logger.error(f"API 返回的不是有效的 JSON 对象")
+                    return None
+
+                # 提取图片 URL
+                image_url = data.get("image")
+                if not image_url:
+                    logger.error(f"API 响应中缺少 image 字段")
+                    return None
+
+                if not isinstance(image_url, str):
+                    logger.error(f"API 响应中的 image 字段不是字符串: {type(image_url)}")
+                    return None
+
+                # 验证 URL 合法性
+                if not (image_url.startswith("http://") or image_url.startswith("https://")):
+                    logger.error(f"API 响应中的 image 字段不是有效的 HTTP(S) URL: {image_url}")
+                    return None
+
+                logger.info(f"从 API 获取到图片 URL: {image_url}")
+                return await self._download_image(session, image_url)
+
+            except (json.JSONDecodeError, UnicodeDecodeError) as e:
+                logger.error(f"JSON 解析失败: {str(e)}")
+                return None
+            except Exception as e:
+                logger.error(f"处理 API 响应时出错: {str(e)}")
+                return None
+
+    async def _save_image_content(
+        self, content: bytes, content_type: str = ""
+    ) -> Optional[str]:
+        """将图片内容保存到临时文件"""
+        if not content or len(content) < 1000:
+            logger.error(f"图片内容太小，可能无效: {len(content) if content else 0} 字节")
+            return None
+
+        # 图片魔数校验
+        image_format = self._detect_image_format(content)
+        if not image_format:
+            # 如果 content-type 明确是图片，仍然尝试保存
+            if "image" in content_type:
+                image_format = "jpg"  # 默认格式
+            else:
+                logger.error("内容不是有效的图片格式（魔数校验失败）")
+                return None
+
+        image_path = os.path.join(
+            self.temp_dir, f"moyu_{uuid.uuid4().hex[:8]}.{image_format}"
+        )
+
+        with open(image_path, "wb") as f:
+            f.write(content)
+
+        return image_path
+
+    def _detect_image_format(self, content: bytes) -> Optional[str]:
+        """通过魔数检测图片格式"""
+        if len(content) < 8:
+            return None
+
+        # JPEG: FF D8 FF
+        if content[:3] == b'\xff\xd8\xff':
+            return "jpg"
+        # PNG: 89 50 4E 47 0D 0A 1A 0A
+        if content[:8] == b'\x89PNG\r\n\x1a\n':
+            return "png"
+        # GIF: 47 49 46 38
+        if content[:4] == b'GIF8':
+            return "gif"
+        # WebP: 52 49 46 46 ... 57 45 42 50
+        if content[:4] == b'RIFF' and len(content) > 11 and content[8:12] == b'WEBP':
+            return "webp"
+
+        return None
 
     async def _download_image(
         self, session: aiohttp.ClientSession, url: str

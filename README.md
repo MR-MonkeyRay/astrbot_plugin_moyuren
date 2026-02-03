@@ -1,7 +1,40 @@
 # 摸鱼人日历插件
-![](https://private-user-images.githubusercontent.com/37870767/411299021-ead4c551-fc3c-48f7-a6f7-afbfdb820512.png?jwt=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJnaXRodWIuY29tIiwiYXVkIjoicmF3LmdpdGh1YnVzZXJjb250ZW50LmNvbSIsImtleSI6ImtleTUiLCJleHAiOjE3NDE3NjMwNDUsIm5iZiI6MTc0MTc2Mjc0NSwicGF0aCI6Ii8zNzg3MDc2Ny80MTEyOTkwMjEtZWFkNGM1NTEtZmMzYy00OGY3LWE2ZjctYWZiZmRiODIwNTEyLnBuZz9YLUFtei1BbGdvcml0aG09QVdTNC1ITUFDLVNIQTI1NiZYLUFtei1DcmVkZW50aWFsPUFLSUFWQ09EWUxTQTUzUFFLNFpBJTJGMjAyNTAzMTIlMkZ1cy1lYXN0LTElMkZzMyUyRmF3czRfcmVxdWVzdCZYLUFtei1EYXRlPTIwMjUwMzEyVDA2NTkwNVomWC1BbXotRXhwaXJlcz0zMDAmWC1BbXotU2lnbmF0dXJlPTNiNGYyZTgxMjFjOWMwZmFkMTQ1NDFhNjhiZDQwZWJiYjg1NDdmYmZkMDNlYTUwOWE3MDFiOTMwNzM5NWFjOTEmWC1BbXotU2lnbmVkSGVhZGVycz1ob3N0In0.MXqbLD4Rbn-LJsONC1os5DGpCFTKnQ8uEZnl3D8H0B8)
 
 一个功能完善的 AstrBot 摸鱼人日历插件，支持精确定时发送、多群组不同时间设置，并提供多种精美排版样式。
+
+## 效果展示
+
+![摸鱼人日历](assets/moyu-api.jpg)
+
+## 安装
+
+### 通过 AstrBot 插件市场安装（推荐）
+
+1. 在 AstrBot 控制台中打开插件市场
+2. 搜索"摸鱼人日历"
+3. 点击安装
+
+### 手动安装
+
+1. 克隆或下载本仓库到 AstrBot 的插件目录
+2. 安装依赖：
+
+```bash
+pip install -r requirements.txt
+```
+
+### 依赖说明
+
+本插件需要以下依赖：
+
+- **aiohttp** - 异步 HTTP 客户端，用于获取摸鱼日历图片
+- **PyYAML** - YAML 配置文件解析
+
+这些依赖通常会随 AstrBot 一起安装，如果遇到导入错误，请手动安装：
+
+```bash
+pip install aiohttp PyYAML
+```
 
 ## 功能特点
 
@@ -39,7 +72,7 @@
 
 - API端点列表：按优先顺序排列，自动故障转移
 - 消息模板：支持多种排版样式，每次按顺序选择
-- 默认模板：当没有其他模板可用时使用
+- 是否启用消息模板：控制是否发送提示语（默认开启）
 - 请求超时时间：API请求的超时设置
 
 用户可以通过AstrBot控制台的配置管理界面修改这些配置。
@@ -57,6 +90,31 @@ Q：样式我不喜欢怎么办，我想固定一个样式，可以吗？
 A：可以的，你现在可以在AstrBot控制台的配置界面中编辑模板列表，只保留你喜欢的模板即可。
 
 ## 更新日志
+
+### v3.1.0
+- 🎨 **模板系统简化**：移除 `default_template` 配置项，简化配置结构
+- ✨ **丰富默认模板**：从 4 个扩展到 10 个不同风格的摸鱼提示模板
+- 🔧 **配置优化**：模板只需 `format` 字段，移除冗余的 `name` 字段
+- 📝 **默认行为调整**：`enable_message_template` 默认值改为 true
+- 🛠️ **逻辑优化**：无有效模板时仅发送图片，不再强制使用默认模板
+- 🕐 **定时发送优化**：同一分钟内多群发送时，自动添加 1-5 秒随机延迟，避免消息过于密集
+- ✅ **测试增强**：新增模板处理逻辑测试
+
+### v3.0.0 🎉 重大重构版本
+- 🏗️ **代码架构重构**：采用分层架构设计，提升代码可维护性
+  - `models/` - 数据模型层
+  - `core/` - 核心业务逻辑层（config, image, scheduler）
+  - `handlers/` - 命令处理层
+  - `utils/` - 工具模块层（paths, constants, decorators）
+- 🔧 **模块化改进**：
+  - 提取公共装饰器到 `utils/decorators.py`
+  - 统一路径管理到 `utils/paths.py`
+  - 集中常量定义到 `utils/constants.py`
+- 🚀 **配置迁移**：新增 `migrate_legacy_config()` 函数，自动迁移旧版配置
+- 📦 **导入优化**：使用相对导入，提升模块加载稳定性
+- 🧹 **代码清理**：移除导入时的副作用，所有初始化操作封装到函数中
+- 📝 **日志统一**：统一使用 `astrbot.api.logger`
+- ✅ **测试框架**：建立完整的单元测试框架
 
 ### v2.4.0
 - 🔧 重构图片管理器，实现图片缓存机制，同一天复用缓存图片
@@ -110,7 +168,39 @@ A：可以的，你现在可以在AstrBot控制台的配置界面中编辑模板
 - 新增多种排版样式
 - 改进定时器实现，提高精确度
 
+## 开发与测试
+
+### 测试
+
+本项目包含完整的测试套件，分为单元测试、集成测试和手动测试。
+
+**运行单元测试**：
+```bash
+pytest tests/unit/ -v
+```
+
+**查看测试覆盖率**：
+```bash
+pytest tests/ -v --cov=. --cov-report=html
+```
+
+测试报告将生成在 `htmlcov/index.html`。
+
+### 测试目录结构
+
+```
+tests/
+├── conftest.py              # 测试夹具（temp_dir, mock_logger, mock_context）
+├── __init__.py
+├── test_constants.py        # 常量测试
+├── test_models.py           # 数据模型测试
+├── test_paths.py            # 路径工具测试
+└── unit/                    # 单元测试
+    └── __init__.py
+```
+
 ## 支持与反馈
 
 - 提交 Issue：[GitHub Issues](https://github.com/MR-MonkeyRay/astrbot_plugin_moyuren/issues)
 - 帮助文档：[AstrBot 官方文档](https://astrbot.app/dev/plugin.html)
+- 

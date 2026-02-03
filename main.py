@@ -1,23 +1,23 @@
 from astrbot.api.event import filter, AstrMessageEvent
 from astrbot.api.star import Context, Star, register
 from astrbot.api import logger
-from astrbot.core.utils.astrbot_path import get_astrbot_data_path
-import os
 import tempfile
+import os
 import traceback
-from pathlib import Path
 
-from .config_manager import ConfigManager
-from .image_manager import ImageManager
-from .command_handler import CommandHelper
-from .scheduler import Scheduler
+from .core.config import ConfigManager
+from .core.image import ImageManager
+from .core.scheduler import Scheduler
+from .handlers.command import CommandHelper
+from .utils.paths import migrate_legacy_config, CONFIG_DIR
+from .utils.constants import PLUGIN_VERSION
 
 
 @register(
     "moyuren",
     "MonkeyRay",
     "一个功能完善的摸鱼人日历插件",
-    "2.4.0",
+    PLUGIN_VERSION,
     "https://github.com/MR-MonkeyRay/astrbot_plugin_moyuren",
 )
 class MoyuRenPlugin(Star):
@@ -43,15 +43,12 @@ class MoyuRenPlugin(Star):
         super().__init__(context)
         self.temp_dir = tempfile.mkdtemp()
 
-        # 获取插件数据目录
-        plugin_data_path = Path(get_astrbot_data_path()) / "plugin_data" / "astrbot_plugin_moyuren"
-        # 确保目录存在
-        plugin_data_path.mkdir(parents=True, exist_ok=True)
-        logger.info(f"插件数据目录: {plugin_data_path}")
+        # ⚠️ 重要：显式调用配置迁移
+        migrate_legacy_config()
 
         # 初始化各个管理器
         logger.info("开始初始化摸鱼人插件...")
-        self.config_manager = ConfigManager(plugin_data_path)
+        self.config_manager = ConfigManager(CONFIG_DIR)
 
         # 使用从AstrBot获取的配置（通过_conf_schema.json）
         self.plugin_config = config or {}
