@@ -187,14 +187,13 @@ class ImageManager:
     async def _fetch_and_process_api(
         self, session: aiohttp.ClientSession, url: str
     ) -> Optional[str]:
-        """发起一次请求，自动判断响应类型并处理
+        """请求新 API 并处理 JSON 响应
 
-        - JSON API：解析 image 字段，再下载图片
-        - 图片 API：直接保存响应内容
+        新 API 返回 JSON 格式：{"date": "...", "image": "https://..."}
         """
         headers = {
             "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36",
-            "Accept": "*/*",
+            "Accept": "application/json",
         }
 
         async with session.get(url, headers=headers, timeout=aiohttp.ClientTimeout(total=self.request_timeout)) as response:
@@ -202,35 +201,46 @@ class ImageManager:
                 logger.error(f"API 请求失败，状态码: {response.status}")
                 return None
 
-            content_type = response.headers.get("content-type", "")
-            # 先读取全部内容到内存（避免流只能读取一次的问题）
+            # 读取响应内容
             content = await response.read()
 
-            if not content or len(content) < 100:
-                logger.error(f"API 响应内容为空或太小")
+            if not content:
+                logger.error(f"API 响应内容为空")
                 return None
 
-            # 如果返回的是图片，直接保存
-            if "image" in content_type:
-                return await self._save_image_content(content, content_type)
-
-            # 尝试解析为 JSON
+            # 解析 JSON 响应
             try:
                 data = json.loads(content.decode("utf-8"))
-                if isinstance(data, dict) and data.get("image"):
-                    image_url = data["image"]
-                    if isinstance(image_url, str):
-                        logger.info(f"JSON API 返回图片 URL: {image_url}")
-                        return await self._download_image(session, image_url)
+
+                # 验证响应格式
+                if not isinstance(data, dict):
+                    logger.error(f"API 返回的不是有效的 JSON 对象")
+                    return None
+
+                # 提取图片 URL
+                image_url = data.get("image")
+                if not image_url:
+                    logger.error(f"API 响应中缺少 image 字段")
+                    return None
+
+                if not isinstance(image_url, str):
+                    logger.error(f"API 响应中的 image 字段不是字符串: {type(image_url)}")
+                    return None
+
+                # 验证 URL 合法性
+                if not (image_url.startswith("http://") or image_url.startswith("https://")):
+                    logger.error(f"API 响应中的 image 字段不是有效的 HTTP(S) URL: {image_url}")
+                    return None
+
+                logger.info(f"从 API 获取到图片 URL: {image_url}")
+                return await self._download_image(session, image_url)
+
             except (json.JSONDecodeError, UnicodeDecodeError) as e:
-                logger.debug(f"JSON 解析失败: {str(e)}")
-
-            # 非图片也非有效 JSON，尝试将内容当作图片保存（某些 API 可能不设置正确的 content-type）
-            if len(content) > 1000:
-                return await self._save_image_content(content, content_type)
-
-            logger.error(f"API {url} 返回了无法识别的内容类型: {content_type}")
-            return None
+                logger.error(f"JSON 解析失败: {str(e)}")
+                return None
+            except Exception as e:
+                logger.error(f"处理 API 响应时出错: {str(e)}")
+                return None
 
     async def _save_image_content(
         self, content: bytes, content_type: str = ""

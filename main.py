@@ -10,13 +10,14 @@ from .core.image import ImageManager
 from .core.scheduler import Scheduler
 from .handlers.command import CommandHelper
 from .utils.paths import migrate_legacy_config, CONFIG_DIR
+from .utils.constants import PLUGIN_VERSION
 
 
 @register(
     "moyuren",
     "MonkeyRay",
-    "一个功能完善的摸鱼人日历插件 - v3.0.0 全新分层架构",
-    "3.0.0",
+    "一个功能完善的摸鱼人日历插件",
+    PLUGIN_VERSION,
     "https://github.com/MR-MonkeyRay/astrbot_plugin_moyuren",
 )
 class MoyuRenPlugin(Star):

@@ -4,7 +4,7 @@
 
 ## 效果展示
 
-![摸鱼人日历](assets/moyu-api.png)
+![摸鱼人日历](assets/moyu-api.jpg)
 
 ## 安装
 
