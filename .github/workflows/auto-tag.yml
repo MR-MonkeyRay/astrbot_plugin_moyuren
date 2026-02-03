@@ -1,0 +1,57 @@
+name: Auto Tag on Release
+
+on:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: write
+
+jobs:
+  auto-tag:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Extract version from metadata.yaml
+        id: version
+        run: |
+          # 提取版本号：支持前导空格，去除注释和引号
+          VERSION=$(grep -E '^[[:space:]]*version:' metadata.yaml | awk '{print $2}' | tr -d '"' | tr -d "'")
+
+          if [ -z "$VERSION" ]; then
+            echo "❌ Error: Could not extract version from metadata.yaml"
+            exit 1
+          fi
+
+          echo "Extracted version: $VERSION"
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+
+      - name: Check if tag exists
+        id: check_tag
+        run: |
+          if git tag -l "${{ steps.version.outputs.version }}" | grep -q .; then
+            echo "Tag ${{ steps.version.outputs.version }} already exists"
+            echo "exists=true" >> $GITHUB_OUTPUT
+          else
+            echo "Tag ${{ steps.version.outputs.version }} does not exist"
+            echo "exists=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Create and push tag
+        if: steps.check_tag.outputs.exists == 'false'
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git tag ${{ steps.version.outputs.version }}
+          git push origin ${{ steps.version.outputs.version }}
+          echo "✅ Created and pushed tag: ${{ steps.version.outputs.version }}"
+
+      - name: Skip tag creation
+        if: steps.check_tag.outputs.exists == 'true'
+        run: |
+          echo "⏭️ Skipped: Tag ${{ steps.version.outputs.version }} already exists"
