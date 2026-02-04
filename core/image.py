@@ -1,12 +1,12 @@
 import aiohttp
-from datetime import datetime
 from astrbot.api import logger
 import os
 import asyncio
 import uuid
 import traceback
-from typing import List, Optional, Union, Dict
+from typing import List, Optional, Dict
 import json
+from urllib.parse import urlparse
 from ..utils.decorators import image_operation_handler
 
 
@@ -33,7 +33,6 @@ class ImageManager:
 
         # 缓存相关属性
         self.cached_image_path: Optional[str] = None
-        self.cached_date: Optional[str] = None
 
         # 并发锁
         self._download_lock: asyncio.Lock = asyncio.Lock()
@@ -106,54 +105,56 @@ class ImageManager:
     @image_operation_handler
     async def get_moyu_image(self) -> Optional[str]:
         """获取摸鱼人日历图片"""
-        # 获取当前日期
-        today = datetime.now().strftime("%Y-%m-%d")
-
-        # 检查缓存是否有效（同一天）
-        if self.cached_image_path and self.cached_date == today:
-            if os.path.exists(self.cached_image_path):
-                logger.info(f"使用缓存的图片: {self.cached_image_path}")
-                return self.cached_image_path
-            else:
-                # 缓存文件不存在，清除缓存
-                self.cached_image_path = None
-                self.cached_date = None
-
-        # 缓存无效，需要生成/下载新图片
         async with self._download_lock:
-            # 双重检查：可能在等待锁的过程中，其他协程已经完成
-            if self.cached_image_path and self.cached_date == today:
-                if os.path.exists(self.cached_image_path):
-                    logger.info(f"使用缓存的图片: {self.cached_image_path}")
-                    return self.cached_image_path
-
-            # 删除旧的缓存文件
-            if self.cached_image_path and os.path.exists(self.cached_image_path):
-                try:
-                    os.remove(self.cached_image_path)
-                    logger.info(f"已删除旧的缓存文件: {self.cached_image_path}")
-                except Exception as e:
-                    logger.warning(f"删除旧缓存文件失败: {e}")
-
-            # API 模式获取图片
             api_endpoints = list(self.api_endpoints)
 
-            # 逐个尝试API直到成功
             for idx, api_url in enumerate(api_endpoints):
                 try:
                     session = self._get_session()
-                    # 发起一次请求并处理（避免双重请求）
-                    img_path = await self._fetch_and_process_api(session, api_url)
+                    # 获取图片 URL
+                    image_url = await self._fetch_image_url(session, api_url)
+                    if not image_url:
+                        continue
 
+                    # 从 URL 提取文件名
+                    filename = os.path.basename(urlparse(image_url).path)
+                    if not filename or "." not in filename:
+                        logger.warning(f"无法从 URL 提取有效文件名: {image_url}")
+                        filename = None
+
+                    # 构造缓存路径
+                    cache_path = (
+                        os.path.join(self.temp_dir, filename) if filename else None
+                    )
+
+                    # 检查缓存是否命中（文件存在且大小有效）
+                    if cache_path and os.path.exists(cache_path):
+                        if os.path.getsize(cache_path) >= 1000:
+                            logger.info(f"缓存命中: {cache_path}")
+                            self.cached_image_path = cache_path
+                            return cache_path
+                        else:
+                            # 缓存文件无效（可能是半文件），删除后重新下载
+                            logger.warning(f"缓存文件无效，将重新下载: {cache_path}")
+                            try:
+                                os.remove(cache_path)
+                            except Exception:
+                                pass
+
+                    # 缓存未命中，下载图片
+                    img_path = await self._download_image(session, image_url, filename)
                     if img_path:
                         logger.info(f"成功获取图片，API索引: {idx+1}")
-                        # 更新缓存
+                        # 删除旧缓存
+                        if self.cached_image_path and self.cached_image_path != img_path:
+                            if os.path.exists(self.cached_image_path):
+                                try:
+                                    os.remove(self.cached_image_path)
+                                    logger.info(f"已删除旧缓存: {self.cached_image_path}")
+                                except Exception as e:
+                                    logger.warning(f"删除旧缓存失败: {e}")
                         self.cached_image_path = img_path
-                        self.cached_date = today
                         return img_path
-                    else:
-                        logger.error(f"API {api_url} 无法获取有效图片")
-                        continue
 
                 except asyncio.TimeoutError:
                     logger.error(f"API {api_url} 请求超时")
@@ -162,34 +163,20 @@ class ImageManager:
                     logger.error(f"处理API {api_url} 时出错: {str(e)}")
                     continue
 
-            # 所有API都失败了，尝试使用本地备用图片
-            logger.error("所有API都失败了，尝试使用本地备用图片")
-            local_backup = os.path.join(os.path.dirname(__file__), "backup_moyu.jpg")
-            if os.path.exists(local_backup):
-                # 复制备用图片到临时目录
-                temp_path = os.path.join(
-                    self.temp_dir, f"moyu_backup_{uuid.uuid4().hex[:8]}.jpg"
-                )
-                try:
-                    import shutil
+            # 所有 API 失败，尝试返回旧缓存
+            if self.cached_image_path and os.path.exists(self.cached_image_path):
+                logger.warning(f"所有API失败，使用旧缓存: {self.cached_image_path}")
+                return self.cached_image_path
 
-                    shutil.copy(local_backup, temp_path)
-                    logger.info(f"使用本地备用图片")
-                    # 更新缓存
-                    self.cached_image_path = temp_path
-                    self.cached_date = today
-                    return temp_path
-                except Exception as e:
-                    logger.error(f"复制本地备用图片失败: {str(e)}")
-
+            logger.error("所有API都失败了，无法获取摸鱼日历图片")
             return None
 
-    async def _fetch_and_process_api(
+    async def _fetch_image_url(
         self, session: aiohttp.ClientSession, url: str
     ) -> Optional[str]:
-        """请求新 API 并处理 JSON 响应
+        """请求 API 并返回图片 URL
 
-        新 API 返回 JSON 格式：{"date": "...", "image": "https://..."}
+        API 返回 JSON 格式：{"date": "...", "image": "https://..."}
         """
         headers = {
             "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36",
@@ -201,39 +188,33 @@ class ImageManager:
                 logger.error(f"API 请求失败，状态码: {response.status}")
                 return None
 
-            # 读取响应内容
             content = await response.read()
-
             if not content:
-                logger.error(f"API 响应内容为空")
+                logger.error("API 响应内容为空")
                 return None
 
-            # 解析 JSON 响应
             try:
                 data = json.loads(content.decode("utf-8"))
 
-                # 验证响应格式
                 if not isinstance(data, dict):
-                    logger.error(f"API 返回的不是有效的 JSON 对象")
+                    logger.error("API 返回的不是有效的 JSON 对象")
                     return None
 
-                # 提取图片 URL
                 image_url = data.get("image")
                 if not image_url:
-                    logger.error(f"API 响应中缺少 image 字段")
+                    logger.error("API 响应中缺少 image 字段")
                     return None
 
                 if not isinstance(image_url, str):
                     logger.error(f"API 响应中的 image 字段不是字符串: {type(image_url)}")
                     return None
 
-                # 验证 URL 合法性
                 if not (image_url.startswith("http://") or image_url.startswith("https://")):
                     logger.error(f"API 响应中的 image 字段不是有效的 HTTP(S) URL: {image_url}")
                     return None
 
                 logger.info(f"从 API 获取到图片 URL: {image_url}")
-                return await self._download_image(session, image_url)
+                return image_url
 
             except (json.JSONDecodeError, UnicodeDecodeError) as e:
                 logger.error(f"JSON 解析失败: {str(e)}")
@@ -242,57 +223,16 @@ class ImageManager:
                 logger.error(f"处理 API 响应时出错: {str(e)}")
                 return None
 
-    async def _save_image_content(
-        self, content: bytes, content_type: str = ""
-    ) -> Optional[str]:
-        """将图片内容保存到临时文件"""
-        if not content or len(content) < 1000:
-            logger.error(f"图片内容太小，可能无效: {len(content) if content else 0} 字节")
-            return None
-
-        # 图片魔数校验
-        image_format = self._detect_image_format(content)
-        if not image_format:
-            # 如果 content-type 明确是图片，仍然尝试保存
-            if "image" in content_type:
-                image_format = "jpg"  # 默认格式
-            else:
-                logger.error("内容不是有效的图片格式（魔数校验失败）")
-                return None
-
-        image_path = os.path.join(
-            self.temp_dir, f"moyu_{uuid.uuid4().hex[:8]}.{image_format}"
-        )
-
-        with open(image_path, "wb") as f:
-            f.write(content)
-
-        return image_path
-
-    def _detect_image_format(self, content: bytes) -> Optional[str]:
-        """通过魔数检测图片格式"""
-        if len(content) < 8:
-            return None
-
-        # JPEG: FF D8 FF
-        if content[:3] == b'\xff\xd8\xff':
-            return "jpg"
-        # PNG: 89 50 4E 47 0D 0A 1A 0A
-        if content[:8] == b'\x89PNG\r\n\x1a\n':
-            return "png"
-        # GIF: 47 49 46 38
-        if content[:4] == b'GIF8':
-            return "gif"
-        # WebP: 52 49 46 46 ... 57 45 42 50
-        if content[:4] == b'RIFF' and len(content) > 11 and content[8:12] == b'WEBP':
-            return "webp"
-
-        return None
-
     async def _download_image(
-        self, session: aiohttp.ClientSession, url: str
+        self, session: aiohttp.ClientSession, url: str, filename: Optional[str] = None
     ) -> Optional[str]:
-        """下载图片并保存到临时文件"""
+        """下载图片并保存到临时文件
+
+        Args:
+            session: aiohttp 会话
+            url: 图片 URL
+            filename: 指定的文件名，如果为 None 则使用 UUID 生成
+        """
         try:
             headers = {
                 "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36",
@@ -301,42 +241,42 @@ class ImageManager:
             }
 
             async with session.get(url, headers=headers) as response:
-                # 检查状态码
                 if response.status != 200:
                     logger.error(f"下载图片失败，状态码: {response.status}")
                     return None
 
-                # 检查内容类型
                 content_type = response.headers.get("content-type", "")
-
-                # 读取响应内容
                 content = await response.read()
                 content_size = len(content)
 
-                if not content or content_size < 1000:  # 图片通常大于1KB
+                if not content or content_size < 1000:
                     logger.error(
                         f"下载的内容太小，可能不是有效图片: {content_size} 字节"
                     )
                     return None
 
-                # 尝试检测图片格式
-                image_format = "jpg"  # 默认格式
-                if content_type:
-                    if "png" in content_type:
-                        image_format = "png"
-                    elif "webp" in content_type:
-                        image_format = "webp"
-                    elif "gif" in content_type:
-                        image_format = "gif"
+                # 使用指定文件名或生成 UUID 文件名
+                if filename:
+                    image_path = os.path.join(self.temp_dir, filename)
+                else:
+                    # 检测图片格式
+                    image_format = "jpg"
+                    if content_type:
+                        if "png" in content_type:
+                            image_format = "png"
+                        elif "webp" in content_type:
+                            image_format = "webp"
+                        elif "gif" in content_type:
+                            image_format = "gif"
+                    image_path = os.path.join(
+                        self.temp_dir, f"moyu_{uuid.uuid4().hex[:8]}.{image_format}"
+                    )
 
-                # 生成临时文件路径
-                image_path = os.path.join(
-                    self.temp_dir, f"moyu_{uuid.uuid4().hex[:8]}.{image_format}"
-                )
-
-                # 保存图片
-                with open(image_path, "wb") as f:
+                # 原子写入：先写临时文件，再替换
+                tmp_path = image_path + ".tmp"
+                with open(tmp_path, "wb") as f:
                     f.write(content)
+                os.replace(tmp_path, image_path)
 
                 return image_path
 

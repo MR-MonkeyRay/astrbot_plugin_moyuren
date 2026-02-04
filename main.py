@@ -1,23 +1,20 @@
 from astrbot.api.event import filter, AstrMessageEvent
 from astrbot.api.star import Context, Star, register
 from astrbot.api import logger
-import tempfile
-import os
 import traceback
 
 from .core.config import ConfigManager
 from .core.image import ImageManager
 from .core.scheduler import Scheduler
 from .handlers.command import CommandHelper
-from .utils.paths import migrate_legacy_config, CONFIG_DIR
-from .utils.constants import PLUGIN_VERSION
+from .utils.paths import migrate_legacy_config, CONFIG_DIR, CACHE_DIR
 
 
 @register(
     "moyuren",
     "MonkeyRay",
     "一个功能完善的摸鱼人日历插件",
-    PLUGIN_VERSION,
+    "3.1.1",
     "https://github.com/MR-MonkeyRay/astrbot_plugin_moyuren",
 )
 class MoyuRenPlugin(Star):
@@ -41,7 +38,7 @@ class MoyuRenPlugin(Star):
 
     def __init__(self, context: Context, config: dict = None):
         super().__init__(context)
-        self.temp_dir = tempfile.mkdtemp()
+        self.cache_dir = CACHE_DIR
 
         # ⚠️ 重要：显式调用配置迁移
         migrate_legacy_config()
@@ -54,7 +51,7 @@ class MoyuRenPlugin(Star):
         self.plugin_config = config or {}
         logger.info(f"加载插件配置: {self.plugin_config}")
 
-        self.image_manager = ImageManager(self.temp_dir, self.plugin_config)
+        self.image_manager = ImageManager(str(self.cache_dir), self.plugin_config)
         self.scheduler = Scheduler(self.config_manager, self.image_manager, context)
         self.command_helper = CommandHelper(
             self.config_manager, self.image_manager, context, self.scheduler
@@ -139,18 +136,15 @@ class MoyuRenPlugin(Star):
                 await instance.image_manager.close()
                 logger.info("已关闭图片管理器网络会话")
 
-            # 清理临时文件
-            if hasattr(instance, "temp_dir") and os.path.exists(instance.temp_dir):
-                for file in os.listdir(instance.temp_dir):
+            # 清理缓存文件
+            if hasattr(instance, "cache_dir") and instance.cache_dir.exists():
+                for file in instance.cache_dir.iterdir():
                     try:
-                        os.remove(os.path.join(instance.temp_dir, file))
+                        if file.is_file():
+                            file.unlink()
                     except Exception as e:
-                        logger.error(f"删除临时文件失败: {str(e)}")
-                try:
-                    os.rmdir(instance.temp_dir)
-                    logger.info("已清理摸鱼人插件临时文件")
-                except Exception as e:
-                    logger.error(f"删除临时目录失败: {str(e)}")
+                        logger.error(f"删除缓存文件失败: {str(e)}")
+                logger.info("已清理摸鱼人插件缓存文件")
         except Exception as e:
             logger.error(f"终止插件时出错: {str(e)}")
             logger.error(traceback.format_exc())
