@@ -3,7 +3,9 @@ name: Auto Tag on Release
 on:
   push:
     branches:
+      - master
       - main
+  workflow_dispatch:  # 允许手动触发，方便调试
 
 permissions:
   contents: write
