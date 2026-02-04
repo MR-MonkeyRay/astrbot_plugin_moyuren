@@ -1,5 +1,4 @@
 import pytest
-import tempfile
 import sys
 from pathlib import Path
 from unittest.mock import MagicMock
@@ -8,11 +7,14 @@ from unittest.mock import MagicMock
 project_root = Path(__file__).parent.parent
 sys.path.insert(0, str(project_root))
 
+# 测试临时目录
+TEST_TMP_DIR = project_root / "tmp"
+
 @pytest.fixture
 def temp_dir():
     """创建临时目录"""
-    with tempfile.TemporaryDirectory() as tmpdir:
-        yield Path(tmpdir)
+    TEST_TMP_DIR.mkdir(parents=True, exist_ok=True)
+    yield TEST_TMP_DIR
 
 @pytest.fixture
 def mock_logger():
@@ -24,5 +26,5 @@ def mock_logger():
 def mock_context():
     """Mock AstrBot context"""
     context = MagicMock()
-    context.base_config = {"data_path": "/tmp/test_data"}
+    context.base_config = {"data_path": str(TEST_TMP_DIR)}
     return context
