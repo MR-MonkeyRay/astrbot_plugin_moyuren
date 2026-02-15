@@ -82,3 +82,69 @@ class ConfigManager:
             )
         logger.info("摸鱼人配置已保存")
         return True
+
+    def set_group_time(self, target: str, time_str: str) -> bool:
+        """设置群组定时时间
+
+        修改内存 → 保存配置 → 失败则回滚
+
+        Args:
+            target: 会话ID
+            time_str: 时间字符串，格式 HH:MM
+
+        Returns:
+            bool: 是否成功
+        """
+        # 备份用于回滚
+        old_settings = self.group_settings.get(target, {}).copy()
+        had_target = target in self.group_settings
+
+        # 修改内存
+        if target not in self.group_settings:
+            self.group_settings[target] = {}
+        self.group_settings[target]["custom_time"] = time_str
+
+        # 保存配置
+        if not self.save_config():
+            # 回滚
+            if had_target:
+                self.group_settings[target] = old_settings
+            else:
+                self.group_settings.pop(target, None)
+            logger.error(f"保存群组 {target} 时间设置失败，已回滚")
+            return False
+        return True
+
+    def clear_group_time(self, target: str) -> bool:
+        """清除群组定时时间
+
+        修改内存 → 保存配置 → 失败则回滚
+
+        Args:
+            target: 会话ID
+
+        Returns:
+            bool: 是否成功
+        """
+        # 备份用于回滚
+        old_settings = self.group_settings.get(target, {}).copy()
+        had_target = target in self.group_settings
+
+        if not had_target or "custom_time" not in self.group_settings.get(target, {}):
+            return True  # 没有需要清除的
+
+        # 修改内存
+        del self.group_settings[target]["custom_time"]
+        if len(self.group_settings[target]) == 0:
+            del self.group_settings[target]
+
+        # 保存配置
+        if not self.save_config():
+            # 回滚
+            if had_target:
+                self.group_settings[target] = old_settings
+            else:
+                self.group_settings.pop(target, None)
+            logger.error(f"清除群组 {target} 时间设置失败，已回滚")
+            return False
+        return True

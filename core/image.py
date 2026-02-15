@@ -85,7 +85,7 @@ class ImageManager:
             await self._session.close()
             self._session = None
 
-    def _get_next_template(self) -> Optional[Dict]:
+    def get_next_template(self) -> Optional[Dict]:
         """按顺序获取下一个消息模板
 
         Returns:
@@ -138,21 +138,13 @@ class ImageManager:
                             logger.warning(f"缓存文件无效，将重新下载: {cache_path}")
                             try:
                                 os.remove(cache_path)
-                            except Exception:
-                                pass
+                            except Exception as e:
+                                logger.warning(f"删除无效缓存文件失败: {cache_path}, {e}")
 
                     # 缓存未命中，下载图片
                     img_path = await self._download_image(session, image_url, filename)
                     if img_path:
                         logger.info(f"成功获取图片，API索引: {idx+1}")
-                        # 删除旧缓存
-                        if self.cached_image_path and self.cached_image_path != img_path:
-                            if os.path.exists(self.cached_image_path):
-                                try:
-                                    os.remove(self.cached_image_path)
-                                    logger.info(f"已删除旧缓存: {self.cached_image_path}")
-                                except Exception as e:
-                                    logger.warning(f"删除旧缓存失败: {e}")
                         self.cached_image_path = img_path
                         return img_path
 

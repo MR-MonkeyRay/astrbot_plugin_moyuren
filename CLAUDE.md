@@ -1,7 +1,5 @@
 # AstrBot 摸鱼人日历插件
 
----
-
 ## 架构总览
 
 ### 技术栈
@@ -9,8 +7,6 @@
 - **框架**：AstrBot Plugin API
 - **依赖**：aiohttp, PyYAML
 - **测试**：pytest, pytest-cov, pytest-asyncio
-
----
 
 ## 模块索引
 
@@ -20,11 +16,9 @@
 | `core/` | 核心业务逻辑层 | `config.py`, `image.py`, `scheduler.py` |
 | `handlers/` | 命令处理层 | `command.py` |
 | `models/` | 数据模型层 | `config_schema.py`, `moyu.py`, `moyu_static.py` |
-| `utils/` | 工具模块层 | `paths.py`, `constants.py`, `decorators.py` |
+| `utils/` | 工具模块层 | `paths.py`, `decorators.py`, `scheduler_utils.py` |
 | `tests/` | 单元测试 | `test_*.py`, `conftest.py` |
-| `data/` | 数据与模板 | `t2i_templates/*.html` |
-
----
+| `data/` | 数据与模板 | `cmd_config.json`, `t2i_templates/*.html` |
 
 ## 运行与开发
 
@@ -44,18 +38,18 @@ pip install -r requirements.txt
 # 运行所有测试
 pytest
 
-# 运行单元测试
-pytest -m unit
-
 # 生成覆盖率报告
 pytest --cov=core --cov=handlers --cov=utils --cov=models --cov-report=html
+
+# 运行所有测试（包括覆盖率）
+pytest tests/ -v --cov=. --cov-report=html
 ```
 
 ### 配置文件
 
-- **插件配置**：`_conf_schema.json` (AstrBot 配置界面可编辑)
-- **数据存放路径**：`{AstrBot数据目录}/plugin_data/astrbot_plugin_moyuren/`
-- **测试配置**：`pytest.ini`, `.coveragerc`
+- 插件配置：`_conf_schema.json` (AstrBot 配置界面可编辑)
+- 数据存放路径：`{AstrBot数据目录}/plugin_data/astrbot_plugin_moyuren/`
+- 测试配置：`pytest.ini`, `.coveragerc`
 
 ### 关键路径
 
@@ -69,73 +63,37 @@ CONFIG_DIR = DATA_ROOT
 CACHE_DIR = DATA_ROOT / "cache"
 ```
 
----
-
 ## 测试策略
 
-### 测试框架
-- **工具**：pytest + pytest-asyncio + pytest-cov
-- **标记**：`@pytest.mark.unit`, `@pytest.mark.integration`, `@pytest.mark.asyncio`
-- **覆盖率目标**：核心模块 > 80%
+- 工具：pytest + pytest-asyncio + pytest-cov
+- 标记：`@pytest.mark.asyncio`
+- 覆盖率目标：核心模块 > 80%
 
 ### 测试结构
 
 ```
 tests/
-├── conftest.py              # 测试夹具（temp_dir, mock_logger, mock_context）
-└── unit/                    # 单元测试
-    ├── __init__.py
-    ├── test_constants.py   # 常量测试
-    ├── test_models.py      # 数据模型测试
-    └── test_paths.py       # 路径工具测试
+├── conftest.py              # 测试夹具
+├── test_paths.py            # 路径工具测试
+├── test_models.py           # 数据模型测试
+├── test_image_template.py   # 图片模板测试
+└── test_scheduler_delay.py  # 调度延迟测试
 ```
-
-### 运行测试
-
-```bash
-# 先导入环境变量,再运行测试
-PYTHONPATH=$(pwd)
-
-# 运行所有单元测试
-pytest tests/unit/ -v
-
-# 运行所有测试（包括覆盖率）
-pytest tests/ -v --cov=. --cov-report=html
-```
-
----
 
 ## 编码规范
 
-### 代码风格
-- **格式化**：遵循 PEP 8
-- **类型注解**：使用 Python 3.10+ 类型提示（如 `tuple[int, int]`）
-- **文档字符串**：所有公共函数/类必须有 docstring
+- 格式化：遵循 PEP 8
+- 类型注解：使用 Python 3.10+ 类型提示（如 `tuple[int, int]`）
+- 文档字符串：所有公共函数/类必须有 docstring
 
 ### 架构原则
-1. **分层清晰**：业务逻辑（core）、命令处理（handlers）、数据模型（models）严格分离
-2. **依赖注入**：通过构造函数传递依赖（如 `ConfigManager`, `ImageManager`）
-3. **错误处理**：使用装饰器统一处理错误（`@config_operation_handler`, `@command_error_handler`）
-4. **异步优先**：所有 I/O 操作使用 `async/await`
 
-### 命名约定
-- **类名**：PascalCase（如 `ConfigManager`）
-- **函数名**：snake_case（如 `load_config`）
-- **常量**：UPPER_SNAKE_CASE（如 `PLUGIN_VERSION`）
-- **私有方法**：前缀 `_`（如 `_get_session`）
-
----
+1. 分层清晰：业务逻辑（core）、命令处理（handlers）、数据模型（models）严格分离
+2. 依赖注入：通过构造函数传递依赖（如 `ConfigManager`, `ImageManager`）
+3. 错误处理：使用装饰器统一处理错误（`@config_operation_handler`, `@command_error_handler`）
+4. 异步优先：网络 I/O 使用 `async/await`，文件 I/O 使用同步操作
 
 ## AI 使用指引
-
-### 代码修改流程
-1. **理解架构**：先阅读本文档的"架构总览"和"模块索引"
-2. **定位模块**：根据需求找到对应的层（core/handlers/models/utils）
-3. **查看依赖**：检查模块间的依赖关系（通过 import 语句）
-4. **修改代码**：遵循"编码规范"进行修改
-5. **运行测试**：确保现有测试通过，必要时添加新测试
-
-### 常见任务指引
 
 #### 添加新命令
 1. 在 `handlers/command.py` 的 `CommandHelper` 类中添加处理方法
@@ -149,38 +107,10 @@ pytest tests/ -v --cov=. --cov-report=html
 
 #### 添加新 API 源
 1. 在 `_conf_schema.json` 的 `api_endpoints` 数组中添加
-2. `core/image.py` 的 `_download_from_api` 会自动故障转移
-
-### 关键文件速查
-
-| 需求 | 文件路径 |
-|------|---------|
-| 插件入口与生命周期 | `main.py` |
-| 命令处理逻辑 | `handlers/command.py` |
-| 配置管理 | `core/config.py` |
-| 图片获取与缓存 | `core/image.py` |
-| 定时任务调度 | `core/scheduler.py` |
-| 数据模型 | `models/moyu.py`, `models/config_schema.py` |
-| 路径管理 | `utils/paths.py` |
-| 错误处理装饰器 | `utils/decorators.py` |
+2. `core/image.py` 的 `get_moyu_image` 会按顺序尝试各端点，自动故障转移
 
 ### 调试技巧
-- **日志**：使用 `from astrbot.api import logger`，统一日志输出
-- **测试**：使用 `pytest -v -s` 查看详细输出
-- **Mock**：参考 `tests/conftest.py` 的 fixture 定义
 
----
-
-## 贡献指南
-
-1. Fork 本仓库
-2. 创建特性分支（`git checkout -b feature/AmazingFeature`）
-3. 提交更改（`git commit -m 'Add some AmazingFeature'`）
-4. 推送到分支（`git push origin feature/AmazingFeature`）
-5. 开启 Pull Request
-
-**注意**：提交前请确保：
-- 所有测试通过（`pytest`）
-- 代码符合 PEP 8 规范
-- 添加了必要的测试用例
-- 更新了相关文档
+- 日志：使用 `from astrbot.api import logger`，统一日志输出
+- 测试：使用 `pytest -v -s` 查看详细输出
+- Mock：参考 `tests/conftest.py` 的 fixture 定义
