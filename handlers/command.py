@@ -51,7 +51,8 @@ class CommandHelper:
         try:
             sender_id = event.get_sender_id()
             return str(sender_id) if sender_id is not None else None
-        except Exception:
+        except Exception as e:
+            logger.debug(f"获取发送者ID失败: {e}")
             return None
 
     async def is_group_admin(self, event: AstrMessageEvent) -> bool:
@@ -156,13 +157,10 @@ class CommandHelper:
             # 获取标准化的群组ID
             target = self.normalize_session_id(event)
 
-            # 更新配置
-            if target not in self.config_manager.group_settings:
-                self.config_manager.group_settings[target] = {}
-            self.config_manager.group_settings[target]["custom_time"] = time_str
-
-            # 保存配置
-            self.config_manager.save_config()
+            # 更新并保存配置
+            if not self.config_manager.set_group_time(target, time_str):
+                yield event.make_result().message("❌ 保存配置失败，请查看日志")
+                return
 
             # 计算等待时间
             now = datetime.now()
@@ -189,8 +187,7 @@ class CommandHelper:
 
             # 唤醒调度器并更新任务队列
             if hasattr(self, "scheduler") and self.scheduler:
-                self.scheduler.update_task_queue()
-                self.scheduler.wakeup_event.set()
+                await self.scheduler.reschedule()
 
             # 使用 make_result() 构建消息
             result = event.make_result()
@@ -216,35 +213,22 @@ class CommandHelper:
             return
 
         target = self.normalize_session_id(event)
-        if target not in self.config_manager.group_settings:
-            yield event.make_result().message("❌ 当前群聊未设置自定义时间")
-            return
-
-        # 检查是否有自定义时间设置
-        if "custom_time" not in self.config_manager.group_settings[target]:
+        group = self.config_manager.group_settings.get(target, {})
+        if "custom_time" not in group:
             yield event.make_result().message("❌ 当前群聊未设置自定义时间")
             return
 
         # 获取当前时间设置，用于显示
-        current_time = self.config_manager.group_settings[target]["custom_time"]
+        current_time = group["custom_time"]
 
-        # 重置时间设置
-        if "custom_time" in self.config_manager.group_settings[target]:
-            del self.config_manager.group_settings[target]["custom_time"]
-
-        if len(self.config_manager.group_settings[target]) == 0:
-            del self.config_manager.group_settings[target]
-
-        self.config_manager.save_config()
+        # 清除时间设置
+        if not self.config_manager.clear_group_time(target):
+            yield event.make_result().message("❌ 保存配置失败，请查看日志")
+            return
 
         # 更新调度器
         if hasattr(self, "scheduler") and self.scheduler:
-            # 从任务队列中删除对应任务
-            self.scheduler.remove_task(target)
-            # 更新任务队列
-            self.scheduler.update_task_queue()
-            # 唤醒调度器
-            self.scheduler.wakeup_event.set()
+            await self.scheduler.reschedule()
 
         yield event.make_result().message(
             f"✅ 已取消定时发送\n原定时间：{current_time}"
@@ -280,7 +264,7 @@ class CommandHelper:
             # 根据配置决定是否发送提示语
             if self.image_manager.enable_message_template:
                 current_time = datetime.now().strftime("%Y-%m-%d %H:%M")
-                template = self.image_manager._get_next_template()
+                template = self.image_manager.get_next_template()
 
                 if template and isinstance(template, dict) and "format" in template:
                     try:
@@ -309,19 +293,14 @@ class CommandHelper:
         self, event: AstrMessageEvent
     ) -> AsyncGenerator[MessageEventResult, None]:
         """查看下一次执行时间"""
-        if not self.scheduler or not hasattr(self.scheduler, "task_queue"):
+        if not self.scheduler:
             yield event.make_result().message(
                 "调度器未初始化，无法获取下一次执行时间"
             )
             return
 
         target = self.normalize_session_id(event)
-        next_time = None
-        for scheduled_time, scheduled_target in self.scheduler.task_queue:
-            if scheduled_target != target:
-                continue
-            if next_time is None or scheduled_time < next_time:
-                next_time = scheduled_time
+        next_time = await self.scheduler.get_next_scheduled_time(target)
 
         if not next_time:
             yield event.make_result().message("当前群聊未设置定时发送")

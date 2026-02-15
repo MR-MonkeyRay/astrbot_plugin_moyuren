@@ -1,4 +1,5 @@
 import asyncio
+import traceback
 from datetime import datetime, timedelta
 import heapq
 from astrbot.api import logger
@@ -17,9 +18,10 @@ class Scheduler:
         self.task_queue: List[Tuple[datetime, str]] = []
         self.wakeup_event = asyncio.Event()
         self.scheduled_task_ref: Optional[asyncio.Task] = None
+        self._queue_lock = asyncio.Lock()
 
-    def update_task_queue(self) -> None:
-        """更新任务队列"""
+    def _rebuild_queue(self) -> None:
+        """重建任务队列（内部方法，调用方需持锁或确保单线程安全）"""
         # 清空当前队列
         self.task_queue = []
 
@@ -60,6 +62,35 @@ class Scheduler:
                 logger.error(f"处理群 {target} 的任务时出错: {str(e)}")
                 logger.error(traceback.format_exc())
 
+    def init_queue(self) -> None:
+        """初始化任务队列（启动时调用，单线程安全）"""
+        self._rebuild_queue()
+        self.wakeup_event.set()
+
+    async def reschedule(self) -> None:
+        """重新调度所有任务（从配置重建队列并唤醒调度器）"""
+        async with self._queue_lock:
+            self._rebuild_queue()
+        self.wakeup_event.set()
+
+    async def get_next_scheduled_time(self, target: str) -> Optional[datetime]:
+        """获取指定目标的下一次调度时间
+
+        Args:
+            target: 目标会话ID
+
+        Returns:
+            下一次调度时间，如果没有则返回 None
+        """
+        async with self._queue_lock:
+            next_time = None
+            for scheduled_time, scheduled_target in self.task_queue:
+                if scheduled_target != target:
+                    continue
+                if next_time is None or scheduled_time < next_time:
+                    next_time = scheduled_time
+            return next_time
+
     async def _send_moyu_message(self, target: str) -> bool:
         """发送摸鱼人日历消息
 
@@ -82,7 +113,7 @@ class Scheduler:
             # 根据配置决定是否发送提示语
             if self.image_manager.enable_message_template:
                 current_time = datetime.now().strftime("%Y-%m-%d %H:%M")
-                template = self.image_manager._get_next_template()
+                template = self.image_manager.get_next_template()
 
                 if template and isinstance(template, dict) and "format" in template:
                     try:
@@ -135,7 +166,8 @@ class Scheduler:
                 )
 
                 # 添加下一次定时任务到队列
-                heapq.heappush(self.task_queue, (next_time, target))
+                async with self._queue_lock:
+                    heapq.heappush(self.task_queue, (next_time, target))
                 logger.info(f"已添加下一次定时任务，执行时间：{next_time.strftime('%Y-%m-%d %H:%M')}")
         except Exception as e:
             logger.error(f"更新下一次执行时间失败: {str(e)}")
@@ -147,14 +179,18 @@ class Scheduler:
         while True:
             try:
                 # 如果任务队列为空，等待唤醒
-                if not self.task_queue:
+                async with self._queue_lock:
+                    queue_empty = not self.task_queue
+                    if queue_empty:
+                        self.wakeup_event.clear()
+                if queue_empty:
                     logger.info("任务队列为空，等待唤醒")
-                    self.wakeup_event.clear()
                     await self.wakeup_event.wait()
                     continue
 
                 # 获取下一个任务
-                next_time, target = self.task_queue[0]
+                async with self._queue_lock:
+                    next_time, target = self.task_queue[0]
 
                 # 计算等待时间
                 now = datetime.now()
@@ -176,19 +212,23 @@ class Scheduler:
                         pass
 
                 # 弹出当前任务
-                next_time, target = heapq.heappop(self.task_queue)
+                async with self._queue_lock:
+                    next_time, target = heapq.heappop(self.task_queue)
 
                 # 执行任务
                 await self._execute_task(target, next_time)
 
                 # 检查是否需要添加随机延迟（仅对同一分钟内的后续任务）
-                if should_delay_for_same_minute(self.task_queue, next_time):
+                async with self._queue_lock:
+                    need_delay = should_delay_for_same_minute(self.task_queue, next_time)
+                if need_delay:
                     delay = get_random_delay()
                     logger.info(f"同一分钟内有后续任务，延迟 {delay:.2f} 秒后继续")
                     await asyncio.sleep(delay)
 
                 # 记录任务队列状态
-                queue_info = [(dt.strftime("%Y-%m-%d %H:%M"), tgt) for dt, tgt in self.task_queue]
+                async with self._queue_lock:
+                    queue_info = [(dt.strftime("%Y-%m-%d %H:%M"), tgt) for dt, tgt in self.task_queue]
                 logger.info(f"执行任务后的队列状态: {queue_info}")
 
             except asyncio.CancelledError:
@@ -222,7 +262,7 @@ class Scheduler:
                 logger.info("定时任务已被取消")
             self.scheduled_task_ref = None
 
-    def remove_task(self, target: str) -> bool:
+    async def remove_task(self, target: str) -> bool:
         """从任务队列中删除特定目标的任务
 
         Args:
@@ -231,29 +271,25 @@ class Scheduler:
         Returns:
             bool: 是否成功删除任务
         """
-        try:
-            # 创建新的任务队列，排除指定目标的任务
-            new_queue = []
-            removed = False
+        async with self._queue_lock:
+            try:
+                new_queue = []
+                removed = False
 
-            # 遍历当前任务队列
-            while self.task_queue:
-                task = heapq.heappop(self.task_queue)
-                time, task_target = task
+                while self.task_queue:
+                    task = heapq.heappop(self.task_queue)
+                    time, task_target = task
+                    if task_target != target:
+                        new_queue.append(task)
+                    else:
+                        removed = True
 
-                # 如果不是要删除的目标，则保留
-                if task_target != target:
-                    new_queue.append(task)
-                else:
-                    removed = True
+                self.task_queue = []
+                for task in new_queue:
+                    heapq.heappush(self.task_queue, task)
 
-            # 重建任务队列
-            self.task_queue = []
-            for task in new_queue:
-                heapq.heappush(self.task_queue, task)
-
-            return removed
-        except Exception as e:
-            logger.error(f"删除任务时出错: {str(e)}")
-            logger.error(traceback.format_exc())
-            return False
+                return removed
+            except Exception as e:
+                logger.error(f"删除任务时出错: {str(e)}")
+                logger.error(traceback.format_exc())
+                return False

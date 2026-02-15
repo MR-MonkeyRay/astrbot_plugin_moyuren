@@ -14,7 +14,7 @@ from .utils.paths import migrate_legacy_config, CONFIG_DIR, CACHE_DIR
     "moyuren",
     "MonkeyRay",
     "一个功能完善的摸鱼人日历插件",
-    "3.1.1",
+    "3.1.2",
     "https://github.com/MR-MonkeyRay/astrbot_plugin_moyuren",
 )
 class MoyuRenPlugin(Star):
@@ -62,13 +62,10 @@ class MoyuRenPlugin(Star):
         self.config_manager.load_config()
         logger.info(f"已加载 {len(self.config_manager.group_settings)} 个群聊配置")
 
-        # 启动定时任务
+        # 初始化任务队列并启动定时任务
         logger.info("启动摸鱼人插件定时任务...")
+        self.scheduler.init_queue()
         self.scheduler.start()
-        # 立即更新任务队列
-        self.scheduler.update_task_queue()
-        # 唤醒调度器处理初始任务
-        self.scheduler.wakeup_event.set()
 
         # 记录任务队列初始状态
         if hasattr(self.scheduler, 'task_queue') and self.scheduler.task_queue:
